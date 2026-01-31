@@ -1,135 +1,100 @@
 import streamlit as st
 import json
 import time
-import requests
 from github import Github
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Islam Jewellery | Live Rates", page_icon="💎", layout="centered")
+# --- CONFIGURATION (Must be first) ---
+st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
 
-# --- PROFESSIONAL STYLING (CSS) ---
+# --- LUXURY DARK THEME CSS ---
 st.markdown("""
     <style>
-        /* Import Google Font */
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap');
+        /* Import Elegant Font */
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Lato:wght@300;400&display=swap');
         
-        /* Main Background */
+        /* 1. Background & Main Colors */
         .stApp {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            font-family: 'Montserrat', sans-serif;
+            background-color: #0e0e0e;
+            background-image: radial-gradient(circle at 50% 0%, #1a1a1a 0%, #000000 100%);
+            color: #d4af37; /* Gold Color */
         }
         
-        /* Hide Default Streamlit Menu */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-
-        /* Header Title Styling */
-        .header-title {
+        /* 2. Typography */
+        h1, h2, h3 {
+            font-family: 'Playfair Display', serif !important;
+            color: #d4af37 !important;
             text-align: center;
-            color: #1a1a1a;
-            font-size: 2.5rem;
+        }
+        p, div {
+            font-family: 'Lato', sans-serif;
+        }
+
+        /* 3. The Main Gold Price Card (Glass Effect) */
+        .gold-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
+            margin: 20px 0;
+            animation: fadeIn 1.5s ease-in-out;
+        }
+        
+        /* 4. Price Text */
+        .big-price {
+            font-size: 80px;
             font-weight: 700;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .header-subtitle {
-            text-align: center;
-            color: #DAA520; /* Golden Rod */
-            font-size: 1.2rem;
-            margin-bottom: 30px;
-            font-weight: 400;
-        }
-
-        /* LIVE Status Badge */
-        .live-badge {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 8px 15px;
-            border-radius: 50px;
-            font-weight: bold;
-            text-align: center;
-            width: fit-content;
-            margin: 0 auto 20px auto;
-            border: 1px solid #c3e6cb;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background: -webkit-linear-gradient(#fff, #d4af37);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 10px 0;
         }
         
-        /* EXPIRED Status Badge */
-        .expired-badge {
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 15px;
+        /* 5. Small Info Cards */
+        .info-box {
+            background: #111;
+            border: 1px solid #333;
             border-radius: 10px;
+            padding: 15px;
             text-align: center;
-            border: 1px solid #f5c6cb;
-            margin-bottom: 20px;
-        }
-
-        /* Info Cards (USD & Ounce) */
-        .info-card {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            text-align: center;
-            transition: transform 0.3s;
-        }
-        .info-card:hover {
-            transform: translateY(-5px);
-        }
-        .info-label {
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
+            color: #888;
         }
         .info-value {
-            color: #333;
-            font-size: 1.5rem;
-            font-weight: 700;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
         }
 
-        /* MAIN GOLD PRICE CARD */
-        .gold-card {
-            background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 20px;
-            text-align: center;
-            margin-top: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            border: 2px solid #DAA520;
-        }
-        .gold-label {
-            color: #DAA520;
-            font-size: 1.2rem;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-        .gold-price {
-            font-size: 3.5rem;
-            font-weight: 800;
-            color: #fff;
-            text-shadow: 0 2px 10px rgba(218, 165, 32, 0.3);
-        }
-        .gold-footer {
-            margin-top: 15px;
-            font-size: 0.8rem;
-            color: #aaa;
+        /* 6. Animations */
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
         }
         
-        /* Footer Contact */
-        .contact-section {
-            text-align: center;
-            margin-top: 40px;
-            color: #555;
-            font-size: 0.9rem;
+        /* 7. Hide Streamlit Elements */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* 8. Status Badges */
+        .status-live {
+            color: #28a745;
+            letter-spacing: 2px;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
         }
-
+        .status-expired {
+            color: #dc3545;
+            letter-spacing: 2px;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -149,120 +114,82 @@ def load_data():
             manual = json.load(f)
     except:
         manual = {"premium": 0, "last_updated": "2000-01-01 00:00:00", "valid_hours": 4}
-        
     return market, manual
 
-# --- ADMIN PANEL ---
-st.sidebar.markdown("## ⚙️ **Control Panel**")
-password = st.sidebar.text_input("Admin Key", type="password")
-
-if password == "123123":
-    st.sidebar.success("🔓 Access Granted")
-    st.sidebar.markdown("---")
-    
-    _, current_manual = load_data()
-    
-    st.sidebar.markdown("### 💰 Profit Adjustment")
-    new_premium = st.sidebar.number_input("Extra Amount (PKR)", value=int(current_manual.get('premium', 0)), step=100)
-    
-    st.sidebar.markdown("### ⏳ Rate Validity")
-    valid_hours = st.sidebar.slider("Hours Active", 1, 24, 4)
-    
-    if st.sidebar.button("🚀 UPDATE LIVE RATE", type="primary"):
-        with st.spinner("Updating Server..."):
-            try:
-                g = Github(st.secrets["GIT_TOKEN"])
-                repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
-                
-                save_data = {
-                    "premium": new_premium,
-                    "last_updated": get_time_pk().strftime("%Y-%m-%d %H:%M:%S"),
-                    "valid_hours": valid_hours
-                }
-                json_content = json.dumps(save_data, indent=4)
-                
-                try:
-                    contents = repo.get_contents("manual.json")
-                    repo.update_file(contents.path, "Admin Update", json_content, contents.sha)
-                except:
-                    repo.create_file("manual.json", "Init Admin", json_content)
-                    
-                st.sidebar.success("✅ Updated Successfully!")
-                time.sleep(2)
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Error: {e}")
-
-# --- MAIN APP ---
+# --- DATA LOADING ---
 market, manual = load_data()
-
 last_update_str = manual.get("last_updated", "2000-01-01 00:00:00")
-last_update_dt = datetime.strptime(last_update_str, "%Y-%m-%d %H:%M:%S")
-last_update_dt = pytz.timezone('Asia/Karachi').localize(last_update_dt)
-
+last_update_dt = pytz.timezone('Asia/Karachi').localize(datetime.strptime(last_update_str, "%Y-%m-%d %H:%M:%S"))
 current_time = get_time_pk()
-hours_passed = (current_time - last_update_dt).total_seconds() / 3600
-is_expired = hours_passed > manual.get("valid_hours", 4)
+is_expired = (current_time - last_update_dt).total_seconds() / 3600 > manual.get("valid_hours", 4)
 
 ounce = market['price_ounce_usd']
 usd_pkr = market['usd_to_pkr']
 premium = manual['premium']
 pak_tola = ((ounce / 31.1035) * 11.66 * usd_pkr) + premium
 
-# --- UI DISPLAY ---
+# --- MAIN UI ---
 
-# 1. Header
-st.markdown("""
-    <div class='header-title'>ISLAM JEWELLERY</div>
-    <div class='header-subtitle'>Premium Gold Rates • Daily Updates</div>
-""", unsafe_allow_html=True)
+# 1. Logo/Header
+st.markdown("<br><h1 style='font-size: 50px;'>ISLAM JEWELLERY</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #888; letter-spacing: 3px;'>EST. 1990 • SARAFA BAZAR</p>", unsafe_allow_html=True)
 
-# 2. Logic Display
+# 2. Main Content
 if is_expired:
-    st.markdown(f"""
-        <div class='expired-badge'>
-            <h2>⚠️ RATES EXPIRED</h2>
-            <p>Market rates are currently closed or pending update.</p>
-            <h3>📞 Call for Rates: 0300-1234567</h3>
-            <small>Last Update: {last_update_str}</small>
+    st.markdown("""
+        <div class='gold-card' style='border-color: #dc3545;'>
+            <div class='status-expired'>● MARKET CLOSED</div>
+            <div class='big-price' style='-webkit-text-fill-color: #555; font-size: 40px;'>Rate Pending</div>
+            <p>Please contact us for the latest rates.</p>
+            <h3>📞 0300-1234567</h3>
         </div>
     """, unsafe_allow_html=True)
 else:
-    # Live Badge
-    st.markdown(f"<div class='live-badge'>● LIVE MARKET ACTIVE</div>", unsafe_allow_html=True)
-
-    # Info Cards (Grid Layout)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"""
-            <div class='info-card'>
-                <div class='info-label'>🌍 Int'l Ounce</div>
-                <div class='info-value'>${ounce:,.2f}</div>
-            </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-            <div class='info-card'>
-                <div class='info-label'>🇺🇸 USD Rate</div>
-                <div class='info-value'>Rs {usd_pkr:.2f}</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    # Big Gold Card
     st.markdown(f"""
         <div class='gold-card'>
-            <div class='gold-label'>🇵🇰 Pure Gold Rate (Per Tola)</div>
-            <div class='gold-price'>Rs {pak_tola:,.0f}</div>
-            <div class='gold-footer'>
-                Based on Int'l Market + Premium Adjustment<br>
-                Last Updated: {last_update_str}
-            </div>
+            <div class='status-live'>● LIVE MARKET RATE</div>
+            <div style='margin-top: 10px; color: #888;'>24K GOLD PER TOLA</div>
+            <div class='big-price'>Rs {pak_tola:,.0f}</div>
+            <p style='color: #666; font-size: 12px;'>UPDATED: {last_update_str} (PKT)</p>
         </div>
     """, unsafe_allow_html=True)
 
-# 3. Footer
-st.markdown("""
-    <div class='contact-section'>
-        <p>Islam Jewellery • Main Sarafa Bazar • Trusted Since 1990</p>
-    </div>
-""", unsafe_allow_html=True)
+    # 3. Small Details (Grid)
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"<div class='info-box'><div style='font-size:12px;'>INTERNATIONAL OUNCE</div><div class='info-value'>${ounce:,.0f}</div></div>", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"<div class='info-box'><div style='font-size:12px;'>DOLLAR RATE</div><div class='info-value'>Rs {usd_pkr:.2f}</div></div>", unsafe_allow_html=True)
+
+# --- SECRET ADMIN PANEL (Invisible) ---
+st.sidebar.markdown("---")
+# We use an 'expander' with a Lock icon. It looks like a tiny button.
+with st.sidebar.expander("🔒 Admin Access"):
+    password = st.text_input("Key", type="password")
+    if password == "123123":
+        st.success("Authorized")
+        
+        # Admin Controls
+        new_premium = st.number_input("Profit/Premium", value=int(premium), step=500)
+        valid_hours = st.slider("Hours Valid", 1, 24, 4)
+        
+        if st.button("Update Price"):
+            try:
+                g = Github(st.secrets["GIT_TOKEN"])
+                repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+                save_data = {
+                    "premium": new_premium,
+                    "last_updated": get_time_pk().strftime("%Y-%m-%d %H:%M:%S"),
+                    "valid_hours": valid_hours
+                }
+                # Save to GitHub
+                try:
+                    contents = repo.get_contents("manual.json")
+                    repo.update_file(contents.path, "Update", json.dumps(save_data), contents.sha)
+                except:
+                    repo.create_file("manual.json", "Init", json.dumps(save_data))
+                st.success("Updated! Refreshing...")
+                time.sleep(2)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
