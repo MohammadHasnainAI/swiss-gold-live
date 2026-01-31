@@ -1,244 +1,232 @@
 import streamlit as st
-import pandas as pd
+import json
+import time
+from github import Github
 from datetime import datetime
+import pytz
 
-# -----------------------------
-# Page Config
-# -----------------------------
-st.set_page_config(
-    page_title="Islam Jewellery - Gold Rate",
-    page_icon="💎",
-    layout="wide"
-)
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
 
-# -----------------------------
-# Luxury Website CSS
-# -----------------------------
+# --- 2. LUXURY CARTIER-STYLE CSS ---
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;500;700&display=swap');
 
-body {
-    background-color: #0b0b0b;
-    color: white;
-    font-family: 'Poppins', sans-serif;
-}
-
-.main {
+.stApp {
     background: linear-gradient(to bottom, #050505, #0d0d0d);
+    font-family: 'Outfit', sans-serif;
+    color: white;
 }
 
-/* Title */
+#MainMenu, footer, header {visibility: hidden;}
+
+/* GOLD TITLE */
 .gold-title {
-    font-size: 55px;
-    font-weight: 800;
+    font-family: 'Playfair Display', serif;
+    font-size: 52px;
+    font-weight: 700;
     text-align: center;
-    color: #d4af37;
+    background: linear-gradient(90deg, #FFD700, #D4AF37, #FFF2B0);
+    -webkit-background-clip: text;
+    color: transparent;
     margin-top: 10px;
-    letter-spacing: 2px;
+    text-shadow: 0px 0px 30px rgba(212, 175, 55, 0.3);
 }
 
-/* Subtitle */
+/* SUBTITLE */
 .subtitle {
     text-align: center;
-    font-size: 16px;
-    color: #aaa;
-    margin-bottom: 25px;
-}
-
-/* Card */
-.gold-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(212,175,55,0.25);
-    padding: 30px;
-    border-radius: 25px;
-    box-shadow: 0px 0px 25px rgba(212,175,55,0.12);
-    text-align: center;
-}
-
-/* Rate Text */
-.rate {
-    font-size: 42px;
-    font-weight: bold;
-    color: #d4af37;
-}
-
-/* Badge Feature */
-.badge {
-    display: inline-block;
-    background: rgba(212,175,55,0.12);
-    border: 1px solid rgba(212,175,55,0.3);
-    padding: 8px 18px;
-    border-radius: 20px;
-    margin: 8px;
     font-size: 14px;
-    color: #f5e6a1;
+    color: #888;
+    letter-spacing: 3px;
+    margin-bottom: 40px;
+    text-transform: uppercase;
 }
 
-/* Buttons */
-.action-btn {
-    background: rgba(255,255,255,0.05);
-    padding: 14px;
-    border-radius: 15px;
+/* MAIN PREMIUM CARD (Glass) */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    border-radius: 30px;
+    padding: 50px;
+    box-shadow: 0 0 40px rgba(212,175,55,0.15);
     text-align: center;
-    border: 1px solid rgba(212,175,55,0.25);
-    font-weight: 600;
+    margin-bottom: 25px;
+    backdrop-filter: blur(10px);
+}
+
+/* PRICE TEXT */
+.price-text {
+    font-size: 85px;
+    font-weight: 800;
     color: white;
-    transition: 0.3s;
+    text-shadow: 0 0 25px rgba(212,175,55,0.6);
+    margin: 15px 0;
+    line-height: 1;
 }
 
-.action-btn:hover {
-    background: rgba(212,175,55,0.15);
-    cursor: pointer;
+/* LIVE DOT */
+.live-dot {
+    color: #00ff99;
+    font-weight: bold;
+    letter-spacing: 2px;
+    font-size: 14px;
 }
 
-/* Sidebar Admin */
-section[data-testid="stSidebar"] {
-    background: #111 !important;
-    border-right: 1px solid rgba(212,175,55,0.2);
+/* STATS GRID */
+.stat-grid {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
 }
 
-input {
-    background: rgba(255,255,255,0.05) !important;
-    border-radius: 12px !important;
-    border: 1px solid rgba(212,175,55,0.25) !important;
-    color: white !important;
-}
-
-/* Footer */
-.footer {
+.stat-card {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 18px;
     text-align: center;
-    font-size: 12px;
-    color: #666;
-    padding: 25px;
-    margin-top: 50px;
 }
 
+.stat-val {
+    font-size: 22px;
+    font-weight: 700;
+    color: #FFD700;
+}
+
+.stat-lbl {
+    font-size: 11px;
+    color: #aaa;
+    letter-spacing: 2px;
+    margin-top: 5px;
+    text-transform: uppercase;
+}
+
+/* PREMIUM BUTTONS */
+.stButton button {
+    background: linear-gradient(90deg, #D4AF37, #FFD700) !important;
+    color: black !important;
+    font-weight: 700 !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    border: none !important;
+    transition: 0.3s !important;
+}
+
+.stButton button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 15px rgba(255,215,0,0.5);
+}
+
+/* SIDEBAR STYLE */
+section[data-testid="stSidebar"] {
+    background-color: #0c0c0c !important;
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
-# Default Data
-# -----------------------------
-if "gold_rate" not in st.session_state:
-    st.session_state.gold_rate = 245000
+# --- 3. LOGIC ---
+def get_time(): return datetime.now(pytz.timezone('Asia/Karachi'))
 
-if "history" not in st.session_state:
-    st.session_state.history = []
+def load_data():
+    try:
+        with open("prices.json", "r") as f: m = json.load(f)
+    except: m = {"price_ounce_usd": 0, "usd_to_pkr": 0}
+    try:
+        with open("manual.json", "r") as f: a = json.load(f)
+    except: a = {"premium": 0, "last_updated": "2000-01-01 00:00:00", "valid_hours": 4}
+    return m, a
 
-# -----------------------------
-# Website Header
-# -----------------------------
-st.markdown("""
-<div style="text-align:center; margin-top:15px;">
-    <img src="https://cdn-icons-png.flaticon.com/512/263/263142.png" width="75">
-</div>
+market, manual = load_data()
+last_str = manual.get("last_updated", "2000-01-01 00:00:00")
+last_dt = pytz.timezone('Asia/Karachi').localize(datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S"))
+is_expired = (get_time() - last_dt).total_seconds() / 3600 > manual.get("valid_hours", 4)
+pk_price = ((market['price_ounce_usd'] / 31.1035) * 11.66 * market['usd_to_pkr']) + manual['premium']
 
-<div class="gold-title">Islam Jewellery</div>
+# --- 4. DISPLAY ---
+st.markdown("<div class='gold-title'>Islam Jewellery</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>EST. 1990 • Sarafa Bazar • Premium Gold Rates</div>", unsafe_allow_html=True)
 
-<div class="subtitle">
-EST. 1990 • Sarafa Bazar • Premium Gold Rate Display
-</div>
-
-<hr style="border:0.5px solid rgba(212,175,55,0.15); margin-bottom:35px;">
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# Main Gold Rate Card
-# -----------------------------
-st.markdown(f"""
-<div class="gold-card">
-
-    <div style="font-size:18px; color:#bbb;">
-        Today's Gold Rate (24K per Tola)
+if is_expired:
+    st.markdown(f"""
+    <div class='glass-panel' style='border-color: #ff4444;'>
+        <div style='color:#ff4444; font-weight:bold; letter-spacing:2px;'>● MARKET CLOSED</div>
+        <div class='price-text' style='color:#666; font-size:60px;'>PENDING</div>
+        <div style="font-size:15px; color:#aaa;">Rates are being updated...</div>
+        <div style="margin-top:20px; font-size:18px; color:#fff;">📞 0300-1234567</div>
     </div>
-
-    <div class="rate">
-        Rs. {st.session_state.gold_rate:,}
-    </div>
-
-    <div style="margin-top:20px;">
-        <span class="badge">💎 Trusted Since 1990</span>
-        <span class="badge">📍 Sarafa Market Live Display</span>
-        <span class="badge">✅ Verified Daily Update</span>
-    </div>
-
-</div>
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# Feature 1: Call + WhatsApp Buttons
-# -----------------------------
-st.markdown("""
-<div style="display:flex; gap:18px; margin-top:30px; justify-content:center;">
-
-    <a href="tel:03001234567" style="flex:1; text-decoration:none;">
-        <div class="action-btn">📞 Call Now</div>
-    </a>
-
-    <a href="https://wa.me/923001234567" target="_blank" style="flex:1; text-decoration:none;">
-        <div class="action-btn">💬 WhatsApp Order</div>
-    </a>
-
-</div>
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# Feature 2: Gold Rate History Table
-# -----------------------------
-st.markdown("<br><h3 style='color:#d4af37;'>📌 Rate Update History</h3>", unsafe_allow_html=True)
-
-if len(st.session_state.history) > 0:
-    df = pd.DataFrame(st.session_state.history)
-    st.dataframe(df, use_container_width=True)
+    """, unsafe_allow_html=True)
 else:
-    st.info("No updates yet. Admin will update rate from dashboard.")
+    # LUXURY GLASS CARD
+    st.markdown(f"""
+    <div class='glass-panel'>
+        <div class='live-dot'>● LIVE GOLD RATE</div>
+        <div class='price-text'>Rs {pk_price:,.0f}</div>
+        <div style="font-size:15px; color:#bbb;">24K Gold Per Tola</div>
+        <div style="font-size:12px; color:#666; margin-top:15px;">
+            Updated: {last_str}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# -----------------------------
-# Sidebar Admin Dashboard
-# -----------------------------
-st.sidebar.markdown("""
-<h2 style="color:#d4af37; text-align:center;">
-🔐 Admin Dashboard
-</h2>
-<hr style="border:0.5px solid rgba(212,175,55,0.2);">
-""", unsafe_allow_html=True)
+    # STATS GRID
+    st.markdown(f"""
+    <div class='stat-grid'>
+        <div class='stat-card'>
+            <div class='stat-val'>${market['price_ounce_usd']:,.0f}</div>
+            <div class='stat-lbl'>Int'l Ounce</div>
+        </div>
 
-password = st.sidebar.text_input("Enter Admin Password", type="password")
+        <div class='stat-card'>
+            <div class='stat-val'>Rs {market['usd_to_pkr']:.2f}</div>
+            <div class='stat-lbl'>USD Rate</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-if password == "admin123":
-
-    st.sidebar.success("Access Granted ✅")
-
-    new_rate = st.sidebar.number_input(
-        "Update Gold Rate (Rs.)",
-        min_value=1000,
-        step=500,
-        value=st.session_state.gold_rate
-    )
-
-    if st.sidebar.button("💾 Save New Rate"):
-
-        st.session_state.gold_rate = new_rate
-
-        st.session_state.history.insert(0, {
-            "Date": datetime.now().strftime("%d-%b-%Y"),
-            "Time": datetime.now().strftime("%I:%M %p"),
-            "New Rate": f"Rs. {new_rate:,}"
-        })
+# --- 5. ADMIN PANEL (Hidden & Secure) ---
+st.sidebar.markdown("---")
+with st.sidebar.expander("🔒 Admin Panel"):
+    pwd = st.text_input("Access Key", type="password")
+    
+    if pwd == "123123":
+        st.success("Welcome, Owner")
         
-        # Force refresh to show new rate immediately
-        st.rerun()
+        # Initialize Memory
+        if 'admin_premium' not in st.session_state:
+            st.session_state.admin_premium = int(manual['premium'])
 
-else:
-    st.sidebar.warning("Enter correct password to manage rates.")
+        def change_val(amount):
+            st.session_state.admin_premium += amount
 
-# -----------------------------
-# Feature 3: Professional Footer
-# -----------------------------
-st.markdown("""
-<div class="footer">
-<hr style="border:0.5px solid rgba(212,175,55,0.12);">
-© 2026 Islam Jewellery • Premium Gold Rate Display System <br>
-Designed for Sarafa Market Professional Shops
-</div>
-""", unsafe_allow_html=True)
+        # Calculator Buttons
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.button("-500", on_click=change_val, args=(-500,))
+        with c2: st.button("-100", on_click=change_val, args=(-100,))
+        with c3: st.button("+100", on_click=change_val, args=(100,))
+        with c4: st.button("+500", on_click=change_val, args=(500,))
+
+        # Input Box
+        new_prem = st.number_input("Profit Margin", key="admin_premium", step=100)
+        
+        # Update Button
+        if st.button("🚀 UPDATE LIVE RATE"):
+            try:
+                g = Github(st.secrets["GIT_TOKEN"])
+                repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+                data = {
+                    "premium": st.session_state.admin_premium,
+                    "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
+                    "valid_hours": 4
+                }
+                try: repo.update_file("manual.json", "Upd", json.dumps(data), repo.get_contents("manual.json").sha)
+                except: repo.create_file("manual.json", "Init", json.dumps(data))
+                
+                st.success("✅ Updated! Refreshing...")
+                time.sleep(2)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
