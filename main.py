@@ -225,8 +225,9 @@ if password == "admin123":
             "Time": datetime.now().strftime("%I:%M %p"),
             "New Rate": f"Rs. {new_rate:,}"
         })
-
-        st.sidebar.success("Gold Rate Updated Successfully!")
+        
+        # Force refresh to show new rate immediately
+        st.rerun()
 
 else:
     st.sidebar.warning("Enter correct password to manage rates.")
