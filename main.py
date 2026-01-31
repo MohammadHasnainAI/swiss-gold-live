@@ -1,14 +1,19 @@
 import streamlit as st
 import json
-import time
 from github import Github
 from datetime import datetime
 import pytz
 import pandas as pd
 import altair as alt
+from streamlit_autorefresh import st_autorefresh
 
 # -------------------------------
-# 1. CONFIG
+# 1. AUTO REFRESH EVERY 10 SEC
+# -------------------------------
+st_autorefresh(interval=10000, key="gold_refresh")
+
+# -------------------------------
+# 2. PAGE CONFIG
 # -------------------------------
 st.set_page_config(
     page_title="Islam Jewellery",
@@ -17,7 +22,7 @@ st.set_page_config(
 )
 
 # -------------------------------
-# 2. CSS
+# 3. CSS STYLING
 # -------------------------------
 st.markdown("""
 <style>
@@ -46,24 +51,13 @@ st.markdown("""
 .btn-call {background-color:#111; color:white !important;}
 .btn-whatsapp {background-color:#25D366; color:white !important;}
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
+
+.admin-logout {margin-top:10px; background:#d9534f; color:white; padding:8px 12px; border-radius:8px; text-align:center; display:inline-block; cursor:pointer;}
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 3. AUTO REFRESH FUNCTION
-# -------------------------------
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = time.time()
-
-def auto_refresh():
-    if time.time() - st.session_state.last_refresh > 10:
-        st.session_state.last_refresh = time.time()
-        st.experimental_rerun()
-
-auto_refresh()
-
-# -------------------------------
-# 4. DATA LOGIC
+# 4. HELPER FUNCTIONS
 # -------------------------------
 def get_time():
     return datetime.now(pytz.timezone("Asia/Karachi"))
@@ -90,7 +84,7 @@ is_expired = (current_time - last_dt).total_seconds() / 3600 > manual.get("valid
 pk_price = ((market["price_ounce_usd"] / 31.1035) * 11.66 * market["usd_to_pkr"]) + manual["premium"]
 
 # -------------------------------
-# 5. WEBSITE DISPLAY
+# 5. MAIN WEBSITE DISPLAY
 # -------------------------------
 st.markdown("""
 <div class="header-box">
@@ -147,14 +141,13 @@ st.markdown("""
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
-def logout():
-    st.session_state.admin_authenticated = False
-    st.success("Logged out successfully ✅")
-    time.sleep(1)
-    st.experimental_rerun()
+if st.session_state.admin_authenticated:
+    if st.button("Logout Admin"):
+        st.session_state.admin_authenticated = False
+        st.experimental_rerun()
 
-with st.expander("Admin Login"):
-    if not st.session_state.admin_authenticated:
+else:
+    with st.expander("Admin Login"):
         key_input = st.text_input("Enter Admin Access Key", type="password")
         if st.button("Login"):
             if key_input == "123123":
@@ -162,13 +155,12 @@ with st.expander("Admin Login"):
                 st.success("Admin Access Granted ✅")
             else:
                 st.error("Incorrect Key ❌")
-    else:
-        st.button("Logout", on_click=logout)
 
 # -------------------------------
-# 7. ADMIN DASHBOARD
+# 7. ADMIN DASHBOARD (FULL WIDTH)
 # -------------------------------
 if st.session_state.admin_authenticated:
+    st.markdown("---")
     st.title("⚙️ Admin Dashboard")
     tabs = st.tabs(["Update Prices", "Stats", "History", "Gold Price Chart"])
 
@@ -220,8 +212,6 @@ if st.session_state.admin_authenticated:
                     repo.create_file("history.json", "Init History", json.dumps(history, indent=2))
 
                 st.success("✅ Updated & Logged History!")
-                time.sleep(1)
-                st.experimental_rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
 
@@ -251,7 +241,7 @@ if st.session_state.admin_authenticated:
 
     # --- TAB 4: Gold Price Chart ---
     with tabs[3]:
-        st.subheader("Gold Price Trend (Last Updates)")
+        st.subheader("Gold Price Trend")
         if history:
             df = pd.DataFrame(history)
             df['last_updated'] = pd.to_datetime(df['last_updated'])
@@ -259,19 +249,19 @@ if st.session_state.admin_authenticated:
                 x='last_updated:T',
                 y='price_ounce_usd:Q',
                 tooltip=['last_updated:T','price_ounce_usd:Q','usd_to_pkr:Q','premium:Q']
-            ).properties(width=800, height=400)
+            ).properties(width=900, height=400)
             st.altair_chart(chart)
         else:
             st.info("No data to show.")
 
 # -------------------------------
-# 8. WEBSITE INFO / DISCLAIMER (Bottom)
+# 8. WEBSITE INFO / DISCLAIMER
 # -------------------------------
 st.markdown("---")
 st.subheader("Website Info & Disclaimer")
 st.markdown("""
 **Islam Jewellery** website shows approximate gold prices.  
-Prices are updated based on market data and premium set by admin.  
+Prices are updated based on market data and admin-set premium.  
 
 ⚠️ **Disclaimer:**  
 - Prices are indicative and may change anytime.  
