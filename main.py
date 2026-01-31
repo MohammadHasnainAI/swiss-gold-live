@@ -5,15 +5,9 @@ from datetime import datetime
 import pytz
 import pandas as pd
 import altair as alt
-from streamlit_autorefresh import st_autorefresh
 
 # -------------------------------
-# 1. AUTO REFRESH EVERY 10 SEC
-# -------------------------------
-st_autorefresh(interval=10000, key="gold_refresh")
-
-# -------------------------------
-# 2. PAGE CONFIG
+# 1. PAGE CONFIG
 # -------------------------------
 st.set_page_config(
     page_title="Islam Jewellery",
@@ -22,7 +16,7 @@ st.set_page_config(
 )
 
 # -------------------------------
-# 3. CSS STYLING
+# 2. CSS STYLING
 # -------------------------------
 st.markdown("""
 <style>
@@ -57,7 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 4. HELPER FUNCTIONS
+# 3. HELPER FUNCTIONS
 # -------------------------------
 def get_time():
     return datetime.now(pytz.timezone("Asia/Karachi"))
@@ -77,6 +71,19 @@ def load_data():
 
 market, manual = load_data()
 
+# -------------------------------
+# 4. AUTO-REFRESH WHEN PRICE UPDATED
+# -------------------------------
+if "last_update_session" not in st.session_state:
+    st.session_state.last_update_session = manual.get("last_updated", "2000-01-01 00:00:00")
+
+if manual.get("last_updated", "2000-01-01 00:00:00") != st.session_state.last_update_session:
+    st.session_state.last_update_session = manual.get("last_updated")
+    st.experimental_rerun()  # Refresh page when price updates
+
+# -------------------------------
+# 5. PRICE CALCULATION
+# -------------------------------
 last_str = manual.get("last_updated", "2000-01-01 00:00:00")
 last_dt = pytz.timezone("Asia/Karachi").localize(datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S"))
 current_time = get_time()
@@ -84,7 +91,7 @@ is_expired = (current_time - last_dt).total_seconds() / 3600 > manual.get("valid
 pk_price = ((market["price_ounce_usd"] / 31.1035) * 11.66 * market["usd_to_pkr"]) + manual["premium"]
 
 # -------------------------------
-# 5. MAIN WEBSITE DISPLAY
+# 6. MAIN WEBSITE DISPLAY
 # -------------------------------
 st.markdown("""
 <div class="header-box">
@@ -136,7 +143,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 6. ADMIN LOGIN / LOGOUT
+# 7. ADMIN LOGIN / LOGOUT
 # -------------------------------
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
@@ -145,7 +152,6 @@ if st.session_state.admin_authenticated:
     if st.button("Logout Admin"):
         st.session_state.admin_authenticated = False
         st.experimental_rerun()
-
 else:
     with st.expander("Admin Login"):
         key_input = st.text_input("Enter Admin Access Key", type="password")
@@ -157,7 +163,7 @@ else:
                 st.error("Incorrect Key ❌")
 
 # -------------------------------
-# 7. ADMIN DASHBOARD (FULL WIDTH)
+# 8. ADMIN DASHBOARD
 # -------------------------------
 if st.session_state.admin_authenticated:
     st.markdown("---")
@@ -255,7 +261,7 @@ if st.session_state.admin_authenticated:
             st.info("No data to show.")
 
 # -------------------------------
-# 8. WEBSITE INFO / DISCLAIMER
+# 9. WEBSITE INFO / DISCLAIMER
 # -------------------------------
 st.markdown("---")
 st.subheader("Website Info & Disclaimer")
