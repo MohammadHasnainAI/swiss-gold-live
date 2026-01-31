@@ -39,31 +39,6 @@ st.markdown("""
         }
         .sub-text { font-size: 14px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
         .gold-title { font-size: 40px; font-weight: 700; color: #D4AF37; text-align: center; letter-spacing: 2px;}
-        
-        /* STATS GRID */
-        .stat-grid {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .stat-card {
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            padding: 15px;
-            width: 48%;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .stat-val { font-size: 20px; font-weight: 600; color: #D4AF37; }
-        .stat-lbl { font-size: 10px; color: #aaa; letter-spacing: 1px; margin-top: 5px; text-transform: uppercase;}
-        
-        /* BUTTON STYLING */
-        .stButton button {
-            width: 100%;
-            border-radius: 5px;
-            font-weight: bold;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -98,7 +73,6 @@ if is_expired:
         </div>
     """, unsafe_allow_html=True)
 else:
-    # MAIN CARD
     st.markdown(f"""
         <div class='glass-panel'>
             <div style='color: #32cd32; font-weight: bold; letter-spacing: 2px; margin-bottom: 10px;'>● LIVE RATE</div>
@@ -108,62 +82,19 @@ else:
         </div>
     """, unsafe_allow_html=True)
 
-    # STATS GRID
-    st.markdown(f"""
-        <div class='stat-grid'>
-            <div class='stat-card'>
-                <div class='stat-val'>${market['price_ounce_usd']:,.0f}</div>
-                <div class='stat-lbl'>Int'l Ounce</div>
-            </div>
-            <div class='stat-card'>
-                <div class='stat-val'>Rs {market['usd_to_pkr']:.2f}</div>
-                <div class='stat-lbl'>USD Rate</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-# --- 5. ADMIN PANEL (FIXED ADD/SUB) ---
+# --- 5. ADMIN ---
 st.sidebar.markdown("---")
 with st.sidebar.expander("🔒 Admin"):
-    pwd = st.text_input("Key", type="password")
-    
-    if pwd == "123123":
+    if st.text_input("Key", type="password") == "123123":
         st.success("Unlocked")
-        
-        # 1. Initialize Memory (So numbers don't reset)
-        if 'admin_premium' not in st.session_state:
-            st.session_state.admin_premium = int(manual['premium'])
-
-        # 2. Helper Functions
-        def change_val(amount):
-            st.session_state.admin_premium += amount
-
-        # 3. CALCULATOR BUTTONS
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: st.button("-500", on_click=change_val, args=(-500,))
-        with c2: st.button("-100", on_click=change_val, args=(-100,))
-        with c3: st.button("+100", on_click=change_val, args=(100,))
-        with c4: st.button("+500", on_click=change_val, args=(500,))
-
-        # 4. The "Sticky" Input Box
-        new_prem = st.number_input("Profit", key="admin_premium", step=100)
-        
-        # 5. Update Button
-        if st.button("🚀 UPDATE PRICE", type="primary"):
+        new_prem = st.number_input("Profit", value=int(manual['premium']), step=100)
+        if st.button("Update"):
             try:
                 g = Github(st.secrets["GIT_TOKEN"])
                 repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
-                data = {
-                    "premium": st.session_state.admin_premium,
-                    "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
-                    "valid_hours": 4
-                }
-                # Save to GitHub
+                data = {"premium": new_prem, "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"), "valid_hours": 4}
                 try: repo.update_file("manual.json", "Upd", json.dumps(data), repo.get_contents("manual.json").sha)
                 except: repo.create_file("manual.json", "Init", json.dumps(data))
-                
-                st.success("Saved! Refreshing...")
-                time.sleep(2)
                 st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
