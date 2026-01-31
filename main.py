@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import time
 from github import Github
 from datetime import datetime
 import pytz
@@ -8,12 +9,7 @@ import altair as alt
 from streamlit_autorefresh import st_autorefresh
 
 # -------------------------------
-# 1. AUTO REFRESH EVERY 10 SEC
-# -------------------------------
-st_autorefresh(interval=10000, key="gold_refresh")
-
-# -------------------------------
-# 2. PAGE CONFIG
+# 1. PAGE CONFIG & AUTO REFRESH
 # -------------------------------
 st.set_page_config(
     page_title="Islam Jewellery",
@@ -21,8 +17,11 @@ st.set_page_config(
     layout="wide"
 )
 
+# Auto-refresh every 30 seconds (10s is too fast for GitHub limits)
+st_autorefresh(interval=30000, key="gold_refresh")
+
 # -------------------------------
-# 3. CSS STYLING
+# 2. CSS STYLING (European Clean)
 # -------------------------------
 st.markdown("""
 <style>
@@ -31,34 +30,38 @@ st.markdown("""
 .stApp {background-color:#ffffff; font-family:'Outfit', sans-serif; color:#333;}
 #MainMenu, footer, header {visibility:hidden;}
 
+/* Header */
 .header-box {text-align:center; padding-bottom:20px; border-bottom:1px solid #f0f0f0; margin-bottom:30px;}
 .brand-title {font-size:3rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:5px; text-transform:uppercase;}
 .brand-subtitle {font-size:0.9rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
 
+/* Cards */
 .price-card {background:#ffffff; border-radius:20px; padding:40px 20px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.08); border:1px solid #f5f5f5; margin-bottom:30px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:8px 16px; border-radius:30px; font-weight:700; font-size:0.8rem; letter-spacing:1px; display:inline-block; margin-bottom:20px;}
 .closed-badge {background-color:#fce8e6; color:#c5221f; padding:8px 16px; border-radius:30px; font-weight:700; font-size:0.8rem; letter-spacing:1px; display:inline-block; margin-bottom:20px;}
 .big-price {font-size:4.5rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-2px;}
 .price-label {font-size:1rem; color:#666; font-weight:400; margin-top:10px;}
 
+/* Stats */
 .stats-container {display:flex; gap:15px; margin-top:20px;}
 .stat-box {flex:1; background:#fafafa; border-radius:15px; padding:20px; text-align:center; border:1px solid #eeeeee;}
 .stat-value {font-size:1.4rem; font-weight:700; color:#d4af37;}
 .stat-label {font-size:0.75rem; color:#999; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-top:5px;}
 
+/* Buttons */
 .btn-grid {display:flex; gap:20px; margin-top:30px; justify-content:center;}
-.contact-btn, .admin-btn {flex:1; padding:15px; border-radius:12px; text-align:center; text-decoration:none; font-weight:600; transition:transform 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.05);}
+.contact-btn {flex:1; padding:15px; border-radius:12px; text-align:center; text-decoration:none; font-weight:600; transition:transform 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.05);}
 .btn-call {background-color:#111; color:white !important;}
 .btn-whatsapp {background-color:#25D366; color:white !important;}
-.admin-btn {background-color:#d4af37; color:white !important;}
-.contact-btn:hover, .admin-btn:hover {transform:translateY(-2px); opacity:0.9;}
+.contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
 
+/* Footer */
 .footer {background:#f9f9f9; padding:25px; text-align:center; font-size:0.85rem; color:#555; margin-top:50px; border-top:1px solid #eee;}
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 4. HELPER FUNCTIONS
+# 3. HELPER FUNCTIONS
 # -------------------------------
 def get_time():
     return datetime.now(pytz.timezone("Asia/Karachi"))
@@ -85,7 +88,7 @@ is_expired = (current_time - last_dt).total_seconds() / 3600 > manual.get("valid
 pk_price = ((market["price_ounce_usd"] / 31.1035) * 11.66 * market["usd_to_pkr"]) + manual["premium"]
 
 # -------------------------------
-# 5. WEBSITE HEADER + PRICE
+# 4. MAIN DISPLAY
 # -------------------------------
 st.markdown("""
 <div class="header-box">
@@ -114,7 +117,7 @@ else:
     """, unsafe_allow_html=True)
 
 # -------------------------------
-# 6. STATS
+# 5. STATS
 # -------------------------------
 st.markdown(f"""
 <div class="stats-container">
@@ -130,7 +133,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 7. CONTACT BUTTONS
+# 6. CONTACT BUTTONS
 # -------------------------------
 st.markdown("""
 <div class="btn-grid">
@@ -140,48 +143,53 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 8. ADMIN LOGIN / LOGOUT
+# 7. ADMIN SECTION
 # -------------------------------
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
-# Logout button
 if st.session_state.admin_authenticated:
-    if st.button("Logout Admin", key="logout_admin"):
+    if st.button("Logout Admin"):
         st.session_state.admin_authenticated = False
-        st.experimental_rerun()
+        st.rerun()  # FIXED: Updated from experimental_rerun
 else:
     with st.expander("Admin Login"):
         key_input = st.text_input("Enter Admin Access Key", type="password")
         if st.button("Login"):
             if key_input == "123123":
                 st.session_state.admin_authenticated = True
-                st.success("Admin Access Granted ✅")
+                st.success("Access Granted")
+                st.rerun() # FIXED
             else:
-                st.error("Incorrect Key ❌")
+                st.error("Incorrect Key")
 
 # -------------------------------
-# 9. ADMIN DASHBOARD
+# 8. ADMIN DASHBOARD
 # -------------------------------
 if st.session_state.admin_authenticated:
     st.markdown("---")
     st.title("⚙️ Admin Dashboard")
-    tabs = st.tabs(["Update Prices", "Stats", "History", "Gold Price Chart"])
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["Update Prices", "Stats", "History", "Gold Chart"])
 
-    # TAB 1: Update Prices
-    with tabs[0]:
+    # TAB 1: Update
+    with tab1:
         if "admin_premium" not in st.session_state:
             st.session_state.admin_premium = manual["premium"]
 
-        col1, col2, col3 = st.columns([1,1,2])
-        col1.button("- 500", on_click=lambda: st.session_state.update({"admin_premium": st.session_state.admin_premium-500}))
-        col2.button("+ 500", on_click=lambda: st.session_state.update({"admin_premium": st.session_state.admin_premium+500}))
-        col3.number_input("Profit Margin (Rs)", key="admin_premium", step=100)
+        c1, c2, c3 = st.columns([1,1,2])
+        if c1.button("- 500"): st.session_state.admin_premium -= 500
+        if c2.button("+ 500"): st.session_state.admin_premium += 500
+        
+        new_val = c3.number_input("Profit Margin (Rs)", value=st.session_state.admin_premium, step=100)
+        st.session_state.admin_premium = new_val
 
         if st.button("🚀 Publish Rate"):
             try:
                 g = Github(st.secrets["GIT_TOKEN"])
                 repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+                
+                # 1. Update Manual.json
                 data = {
                     "premium": st.session_state.admin_premium,
                     "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
@@ -193,7 +201,7 @@ if st.session_state.admin_authenticated:
                 except:
                     repo.create_file("manual.json", "Init", json.dumps(data))
 
-                # Update history
+                # 2. Update History.json
                 try:
                     contents = repo.get_contents("history.json")
                     history = json.loads(contents.decoded_content.decode())
@@ -207,63 +215,61 @@ if st.session_state.admin_authenticated:
                     "price_ounce_usd": market["price_ounce_usd"]
                 })
 
+                # Keep only last 50 records to save space
+                if len(history) > 50:
+                    history = history[-50:]
+
                 try:
                     contents = repo.get_contents("history.json")
-                    repo.update_file(contents.path, "Append History", json.dumps(history, indent=2), contents.sha)
+                    repo.update_file(contents.path, "Update History", json.dumps(history, indent=2), contents.sha)
                 except:
                     repo.create_file("history.json", "Init History", json.dumps(history, indent=2))
 
-                st.success("✅ Updated & Logged History!")
-                st.experimental_rerun()  # refresh all users automatically
+                st.success("✅ Updated Successfully!")
+                time.sleep(1)
+                st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
 
     # TAB 2: Stats
-    with tabs[1]:
-        st.subheader("Current Stats")
+    with tab2:
         st.metric("Current Premium", f"Rs {manual['premium']}")
-        st.metric("USD to PKR", f"Rs {market['usd_to_pkr']}")
-        st.metric("Gold Price/Ounce", f"${market['price_ounce_usd']}")
+        st.metric("USD Rate", f"Rs {market['usd_to_pkr']}")
 
-    # TAB 3: History
-    with tabs[2]:
-        st.subheader("Price Update History")
+    # TAB 3: History Data
+    with tab3:
         try:
             g = Github(st.secrets["GIT_TOKEN"])
             repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
             contents = repo.get_contents("history.json")
-            history = json.loads(contents.decoded_content.decode())
-        except:
-            history = []
-
-        if history:
-            df = pd.DataFrame(history)
+            history_data = json.loads(contents.decoded_content.decode())
+            df = pd.DataFrame(history_data)
             st.dataframe(df)
-        else:
-            st.info("No history yet.")
+        except:
+            st.info("No history found.")
 
-    # TAB 4: Gold Price Chart
-    with tabs[3]:
-        st.subheader("Gold Price Trend")
-        if history:
-            df = pd.DataFrame(history)
-            df['last_updated'] = pd.to_datetime(df['last_updated'])
-            chart = alt.Chart(df).mark_line(point=True).encode(
-                x='last_updated:T',
-                y='price_ounce_usd:Q',
-                tooltip=['last_updated:T','price_ounce_usd:Q','usd_to_pkr:Q','premium:Q']
-            ).properties(width=900, height=400)
-            st.altair_chart(chart)
-        else:
-            st.info("No data to show.")
+    # TAB 4: Chart
+    with tab4:
+        try:
+            if 'df' in locals() and not df.empty:
+                df['last_updated'] = pd.to_datetime(df['last_updated'])
+                chart = alt.Chart(df).mark_line(point=True).encode(
+                    x='last_updated:T',
+                    y='premium:Q',
+                    tooltip=['last_updated', 'premium']
+                ).properties(title="Premium Trends")
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.info("Update price at least once to see the chart.")
+        except:
+            st.info("Chart data unavailable.")
 
 # -------------------------------
-# 10. FOOTER / DISCLAIMER
+# 9. DISCLAIMER
 # -------------------------------
 st.markdown("""
 <div class="footer">
-**Islam Jewellery** website shows approximate gold prices.<br>
-Prices are updated based on market data and admin-set premium.<br><br>
-⚠️ **Disclaimer:** Prices are indicative and may change anytime. Always verify with the shop before buying. Contact shop directly for confirmed gold rates.
+**Islam Jewellery** • Sarafa Bazar <br>
+⚠️ Prices are indicative and subject to market changes. Verify before booking.
 </div>
 """, unsafe_allow_html=True)
