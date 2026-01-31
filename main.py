@@ -39,6 +39,24 @@ st.markdown("""
         }
         .sub-text { font-size: 14px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
         .gold-title { font-size: 40px; font-weight: 700; color: #D4AF37; text-align: center; letter-spacing: 2px;}
+        
+        /* SMALL STATS GRID */
+        .stat-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 15px;
+            width: 48%;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-val { font-size: 20px; font-weight: 600; color: #D4AF37; }
+        .stat-lbl { font-size: 10px; color: #aaa; letter-spacing: 1px; margin-top: 5px; text-transform: uppercase;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -73,12 +91,27 @@ if is_expired:
         </div>
     """, unsafe_allow_html=True)
 else:
+    # MAIN CARD
     st.markdown(f"""
         <div class='glass-panel'>
             <div style='color: #32cd32; font-weight: bold; letter-spacing: 2px; margin-bottom: 10px;'>● LIVE RATE</div>
             <div class='price-text'>Rs {pk_price:,.0f}</div>
             <div class='sub-text' style='margin-top: 15px;'>24K Gold Per Tola</div>
             <div style='font-size: 12px; color: #555; margin-top: 10px;'>Updated: {last_str}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # SMALL STATS (ADDED BACK)
+    st.markdown(f"""
+        <div class='stat-grid'>
+            <div class='stat-card'>
+                <div class='stat-val'>${market['price_ounce_usd']:,.0f}</div>
+                <div class='stat-lbl'>Int'l Ounce</div>
+            </div>
+            <div class='stat-card'>
+                <div class='stat-val'>Rs {market['usd_to_pkr']:.2f}</div>
+                <div class='stat-lbl'>USD Rate</div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
