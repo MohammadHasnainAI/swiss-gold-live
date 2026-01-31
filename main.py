@@ -4,9 +4,11 @@ import time
 from github import Github
 from datetime import datetime
 import pytz
+import pandas as pd
+import altair as alt
 
 # -------------------------------
-# 1. CONFIGURATION
+# 1. CONFIG
 # -------------------------------
 st.set_page_config(
     page_title="Islam Jewellery",
@@ -15,7 +17,7 @@ st.set_page_config(
 )
 
 # -------------------------------
-# 2. CSS STYLING
+# 2. CSS
 # -------------------------------
 st.markdown("""
 <style>
@@ -36,19 +38,20 @@ st.markdown("""
 
 .stats-container {display:flex; gap:15px; margin-top:20px;}
 .stat-box {flex:1; background:#fafafa; border-radius:15px; padding:20px; text-align:center; border:1px solid #eeeeee;}
-.stat-value {font-size:1.4rem; font-weight:700; color:#d4af37;}
-.stat-label {font-size:0.75rem; color:#999; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-top:5px;}
+.stat-value {font-size:1.6rem; font-weight:700; color:#d4af37;}
+.stat-label {font-size:0.85rem; color:#999; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-top:5px;}
 
 .btn-grid {display:flex; gap:15px; margin-top:30px;}
 .contact-btn {flex:1; padding:15px; border-radius:12px; text-align:center; text-decoration:none; font-weight:600; transition:transform 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.05);}
 .btn-call {background-color:#111; color:white !important;}
 .btn-whatsapp {background-color:#25D366; color:white !important;}
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
+
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 3. LOGIC
+# 3. DATA LOGIC
 # -------------------------------
 def get_time():
     return datetime.now(pytz.timezone("Asia/Karachi"))
@@ -67,24 +70,23 @@ def load_data():
     return market, manual
 
 market, manual = load_data()
-
 last_str = manual.get("last_updated", "2000-01-01 00:00:00")
 last_dt = pytz.timezone("Asia/Karachi").localize(datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S"))
 current_time = get_time()
 is_expired = (current_time - last_dt).total_seconds() / 3600 > manual.get("valid_hours", 4)
-
 pk_price = ((market["price_ounce_usd"] / 31.1035) * 11.66 * market["usd_to_pkr"]) + manual["premium"]
 
 # -------------------------------
-# 4. MAIN DISPLAY
+# 4. WEBSITE DISPLAY
 # -------------------------------
-st.markdown(f"""
+st.markdown("""
 <div class="header-box">
     <div class="brand-title">Islam Jewellery</div>
     <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
 </div>
 """, unsafe_allow_html=True)
 
+# Price Card
 if is_expired:
     st.markdown(f"""
     <div class="price-card">
@@ -104,6 +106,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
+# Stats
 st.markdown(f"""
 <div class="stats-container">
     <div class="stat-box">
@@ -114,9 +117,14 @@ st.markdown(f"""
         <div class="stat-value">Rs {market['usd_to_pkr']:.2f}</div>
         <div class="stat-label">USD Rate</div>
     </div>
+    <div class="stat-box">
+        <div class="stat-value">Rs {manual['premium']}</div>
+        <div class="stat-label">Admin Premium</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
+# Contact Buttons
 st.markdown("""
 <div class="btn-grid">
     <a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a>
@@ -125,77 +133,86 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 5. FULL PAGE ADMIN DASHBOARD WITH TABS
+# 5. ADMIN LOGIN
 # -------------------------------
-st.title("⚙️ Admin Dashboard")
+if "admin_authenticated" not in st.session_state:
+    st.session_state.admin_authenticated = False
 
-tabs = st.tabs(["Update Prices", "Stats", "History", "Website Info"])
+with st.sidebar:
+    st.header("Admin Login")
+    key_input = st.text_input("Enter Access Key", type="password")
+    if st.button("Login"):
+        if key_input == "123123":
+            st.session_state.admin_authenticated = True
+            st.success("✅ Admin Access Granted")
+        else:
+            st.error("❌ Wrong Key")
 
-# --- TAB 1: UPDATE PRICES ---
-with tabs[0]:
-    pwd = st.text_input("Enter Access Key", type="password")
-    if pwd == "123123":
-        st.success("Authorized ✅")
-        if "admin_premium" not in st.session_state:
-            st.session_state.admin_premium = int(manual["premium"])
+# -------------------------------
+# 6. FULL-WIDTH ADMIN DASHBOARD
+# -------------------------------
+if st.session_state.admin_authenticated:
+    st.title("⚙️ Admin Dashboard")
 
-        c1, c2 = st.columns(2)
-        c1.button("- 500", on_click=lambda: st.session_state.update({'admin_premium': st.session_state.admin_premium-500}))
-        c2.button("+ 500", on_click=lambda: st.session_state.update({'admin_premium': st.session_state.admin_premium+500}))
+    # Dashboard Cards
+    st.subheader("Quick Stats")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Premium (Rs)", manual['premium'])
+    col2.metric("USD to PKR", market['usd_to_pkr'])
+    col3.metric("Gold/Ounce ($)", market['price_ounce_usd'])
+    col4.metric("Last Updated", last_str)
 
-        st.number_input("Profit Margin (Rs)", key="admin_premium", step=100)
+    # Update Prices
+    st.subheader("Update Prices")
+    if "admin_premium" not in st.session_state:
+        st.session_state.admin_premium = manual["premium"]
 
-        if st.button("🚀 Publish Rate"):
+    u_col1, u_col2 = st.columns(2)
+    u_col1.button("- 500", on_click=lambda: st.session_state.update({"admin_premium": st.session_state.admin_premium-500}))
+    u_col2.button("+ 500", on_click=lambda: st.session_state.update({"admin_premium": st.session_state.admin_premium+500}))
+
+    st.number_input("Profit Margin (Rs)", key="admin_premium", step=100)
+
+    if st.button("🚀 Publish Rate"):
+        try:
+            g = Github(st.secrets["GIT_TOKEN"])
+            repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+            data = {
+                "premium": st.session_state.admin_premium,
+                "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
+                "valid_hours": 4
+            }
             try:
-                g = Github(st.secrets["GIT_TOKEN"])
-                repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+                contents = repo.get_contents("manual.json")
+                repo.update_file(contents.path, "Update", json.dumps(data), contents.sha)
+            except:
+                repo.create_file("manual.json", "Init", json.dumps(data))
 
-                data = {
-                    "premium": st.session_state.admin_premium,
-                    "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
-                    "valid_hours": 4
-                }
-                # Update manual.json
-                try:
-                    contents = repo.get_contents("manual.json")
-                    repo.update_file(contents.path, "Update", json.dumps(data), contents.sha)
-                except:
-                    repo.create_file("manual.json", "Init", json.dumps(data))
+            # History
+            try:
+                contents = repo.get_contents("history.json")
+                history = json.loads(contents.decoded_content.decode())
+            except:
+                history = []
 
-                # History logging
-                try:
-                    contents = repo.get_contents("history.json")
-                    history = json.loads(contents.decoded_content.decode())
-                except:
-                    history = []
+            history.append({
+                "premium": st.session_state.admin_premium,
+                "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
+                "usd_to_pkr": market["usd_to_pkr"],
+                "price_ounce_usd": market["price_ounce_usd"]
+            })
 
-                history.append({
-                    "premium": st.session_state.admin_premium,
-                    "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
-                    "usd_to_pkr": market["usd_to_pkr"],
-                    "price_ounce_usd": market["price_ounce_usd"]
-                })
+            try:
+                contents = repo.get_contents("history.json")
+                repo.update_file(contents.path, "Append History", json.dumps(history, indent=2), contents.sha)
+            except:
+                repo.create_file("history.json", "Init History", json.dumps(history, indent=2))
 
-                try:
-                    contents = repo.get_contents("history.json")
-                    repo.update_file(contents.path, "Append History", json.dumps(history, indent=2), contents.sha)
-                except:
-                    repo.create_file("history.json", "Init History", json.dumps(history, indent=2))
+            st.success("✅ Updated & Logged History!")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-                st.success("✅ Updated & Logged History!")
-                st.experimental_rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-# --- TAB 2: STATS ---
-with tabs[1]:
-    st.subheader("Live Stats")
-    st.metric("Current Premium", f"Rs {manual['premium']}")
-    st.metric("USD to PKR", f"Rs {market['usd_to_pkr']}")
-    st.metric("Gold Price/Ounce", f"${market['price_ounce_usd']}")
-
-# --- TAB 3: HISTORY ---
-with tabs[2]:
+    # History Table
     st.subheader("Price Update History")
     try:
         g = Github(st.secrets["GIT_TOKEN"])
@@ -206,20 +223,36 @@ with tabs[2]:
         history = []
 
     if history:
-        st.dataframe(history)
+        df = pd.DataFrame(history)
+        st.dataframe(df, use_container_width=True)
     else:
         st.info("No history yet.")
 
-# --- TAB 4: WEBSITE INFO ---
-with tabs[3]:
-    st.subheader("Website Info & Disclaimer")
-    st.markdown("""
-    **Islam Jewellery Website** is for display purposes only.  
-    Prices are based on market data and manual premium entry.  
-    Please contact the shop before making any purchase.  
+    # Live Gold Chart
+    st.subheader("Gold Price Trend")
+    if history:
+        df_chart = pd.DataFrame(history)
+        df_chart['last_updated'] = pd.to_datetime(df_chart['last_updated'])
+        chart = alt.Chart(df_chart).mark_line(point=True).encode(
+            x='last_updated:T',
+            y='price_ounce_usd:Q',
+            tooltip=['last_updated:T','price_ounce_usd:Q','usd_to_pkr:Q','premium:Q']
+        ).properties(width=1000, height=400)
+        st.altair_chart(chart)
+    else:
+        st.info("No data to show.")
 
-    ⚠️ **Disclaimer:**  
-    - Prices are indicative and may change without notice.  
-    - We are not responsible for any discrepancies.  
-    - Contact directly for the latest verified gold rates.
-    """)
+# -------------------------------
+# 7. WEBSITE INFO / DISCLAIMER
+# -------------------------------
+st.markdown("---")
+st.subheader("Website Info & Disclaimer")
+st.markdown("""
+**Islam Jewellery** website shows approximate gold prices.  
+Prices are updated based on market data and admin settings.  
+
+⚠️ **Disclaimer:**  
+- Prices are indicative and may change anytime.  
+- Always verify with the shop before buying.  
+- Contact shop directly for confirmed gold rates.
+""")
