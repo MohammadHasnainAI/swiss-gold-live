@@ -140,8 +140,8 @@ st.markdown(f"""
 # Contact Buttons
 st.markdown("""
 <div class="btn-grid">
-    <a href="tel:03001234567" class="contact-btn btn-call">📞 Call Now</a>
-    <a href="https://wa.me/923001234567" class="contact-btn btn-whatsapp">💬 WhatsApp</a>
+    <a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a>
+    <a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a>
 </div>
 """, unsafe_allow_html=True)
 
