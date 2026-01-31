@@ -8,124 +8,63 @@ import pytz
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
 
-# --- 2. LUXURY CARTIER-STYLE CSS ---
+# --- 2. LUXURY CSS ---
 st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;500;700&display=swap');
-
-.stApp {
-    background: linear-gradient(to bottom, #050505, #0d0d0d);
-    font-family: 'Outfit', sans-serif;
-    color: white;
-}
-
-#MainMenu, footer, header {visibility: hidden;}
-
-/* GOLD TITLE */
-.gold-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 52px;
-    font-weight: 700;
-    text-align: center;
-    background: linear-gradient(90deg, #FFD700, #D4AF37, #FFF2B0);
-    -webkit-background-clip: text;
-    color: transparent;
-    margin-top: 10px;
-    text-shadow: 0px 0px 30px rgba(212, 175, 55, 0.3);
-}
-
-/* SUBTITLE */
-.subtitle {
-    text-align: center;
-    font-size: 14px;
-    color: #888;
-    letter-spacing: 3px;
-    margin-bottom: 40px;
-    text-transform: uppercase;
-}
-
-/* MAIN PREMIUM CARD (Glass) */
-.glass-panel {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(212, 175, 55, 0.25);
-    border-radius: 30px;
-    padding: 50px;
-    box-shadow: 0 0 40px rgba(212,175,55,0.15);
-    text-align: center;
-    margin-bottom: 25px;
-    backdrop-filter: blur(10px);
-}
-
-/* PRICE TEXT */
-.price-text {
-    font-size: 85px;
-    font-weight: 800;
-    color: white;
-    text-shadow: 0 0 25px rgba(212,175,55,0.6);
-    margin: 15px 0;
-    line-height: 1;
-}
-
-/* LIVE DOT */
-.live-dot {
-    color: #00ff99;
-    font-weight: bold;
-    letter-spacing: 2px;
-    font-size: 14px;
-}
-
-/* STATS GRID */
-.stat-grid {
-    display: flex;
-    gap: 15px;
-    margin-top: 10px;
-}
-
-.stat-card {
-    flex: 1;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 20px;
-    padding: 18px;
-    text-align: center;
-}
-
-.stat-val {
-    font-size: 22px;
-    font-weight: 700;
-    color: #FFD700;
-}
-
-.stat-lbl {
-    font-size: 11px;
-    color: #aaa;
-    letter-spacing: 2px;
-    margin-top: 5px;
-    text-transform: uppercase;
-}
-
-/* PREMIUM BUTTONS */
-.stButton button {
-    background: linear-gradient(90deg, #D4AF37, #FFD700) !important;
-    color: black !important;
-    font-weight: 700 !important;
-    border-radius: 12px !important;
-    padding: 10px !important;
-    border: none !important;
-    transition: 0.3s !important;
-}
-
-.stButton button:hover {
-    transform: scale(1.03);
-    box-shadow: 0 0 15px rgba(255,215,0,0.5);
-}
-
-/* SIDEBAR STYLE */
-section[data-testid="stSidebar"] {
-    background-color: #0c0c0c !important;
-    border-right: 1px solid rgba(255,255,255,0.08);
-}
-</style>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap');
+        .stApp {
+            background-color: #000000;
+            background-image: radial-gradient(circle at 50% 0%, #1c1c1c 0%, #000000 70%);
+            font-family: 'Outfit', sans-serif;
+            color: white;
+        }
+        #MainMenu, header, footer {visibility: hidden;}
+        
+        /* CARD DESIGN */
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .price-text {
+            font-size: 80px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 0 20px #D4AF37;
+            margin: 0;
+            line-height: 1;
+        }
+        .sub-text { font-size: 14px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
+        .gold-title { font-size: 40px; font-weight: 700; color: #D4AF37; text-align: center; letter-spacing: 2px;}
+        
+        /* STATS GRID */
+        .stat-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 15px;
+            width: 48%;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-val { font-size: 20px; font-weight: 600; color: #D4AF37; }
+        .stat-lbl { font-size: 10px; color: #aaa; letter-spacing: 1px; margin-top: 5px; text-transform: uppercase;}
+        
+        /* BUTTON STYLING */
+        .stButton button {
+            width: 100%;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
 # --- 3. LOGIC ---
@@ -147,73 +86,70 @@ is_expired = (get_time() - last_dt).total_seconds() / 3600 > manual.get("valid_h
 pk_price = ((market['price_ounce_usd'] / 31.1035) * 11.66 * market['usd_to_pkr']) + manual['premium']
 
 # --- 4. DISPLAY ---
-st.markdown("<div class='gold-title'>Islam Jewellery</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>EST. 1990 • Sarafa Bazar • Premium Gold Rates</div>", unsafe_allow_html=True)
+st.markdown("<div class='gold-title'>ISLAM JEWELLERY</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #666; margin-bottom: 30px;'>EST. 1990 • SARAFA BAZAR</div>", unsafe_allow_html=True)
 
 if is_expired:
     st.markdown(f"""
-    <div class='glass-panel' style='border-color: #ff4444;'>
-        <div style='color:#ff4444; font-weight:bold; letter-spacing:2px;'>● MARKET CLOSED</div>
-        <div class='price-text' style='color:#666; font-size:60px;'>PENDING</div>
-        <div style="font-size:15px; color:#aaa;">Rates are being updated...</div>
-        <div style="margin-top:20px; font-size:18px; color:#fff;">📞 0300-1234567</div>
-    </div>
+        <div class='glass-panel' style='border-color: #ff4444;'>
+            <div style='color: #ff4444; font-weight: bold; letter-spacing: 2px;'>● MARKET CLOSED</div>
+            <div style='font-size: 40px; color: #555; margin: 20px 0;'>PENDING</div>
+            <div class='sub-text'>Contact: 0300-1234567</div>
+        </div>
     """, unsafe_allow_html=True)
 else:
-    # LUXURY GLASS CARD
+    # MAIN CARD
     st.markdown(f"""
-    <div class='glass-panel'>
-        <div class='live-dot'>● LIVE GOLD RATE</div>
-        <div class='price-text'>Rs {pk_price:,.0f}</div>
-        <div style="font-size:15px; color:#bbb;">24K Gold Per Tola</div>
-        <div style="font-size:12px; color:#666; margin-top:15px;">
-            Updated: {last_str}
+        <div class='glass-panel'>
+            <div style='color: #32cd32; font-weight: bold; letter-spacing: 2px; margin-bottom: 10px;'>● LIVE RATE</div>
+            <div class='price-text'>Rs {pk_price:,.0f}</div>
+            <div class='sub-text' style='margin-top: 15px;'>24K Gold Per Tola</div>
+            <div style='font-size: 12px; color: #555; margin-top: 10px;'>Updated: {last_str}</div>
         </div>
-    </div>
     """, unsafe_allow_html=True)
 
     # STATS GRID
     st.markdown(f"""
-    <div class='stat-grid'>
-        <div class='stat-card'>
-            <div class='stat-val'>${market['price_ounce_usd']:,.0f}</div>
-            <div class='stat-lbl'>Int'l Ounce</div>
+        <div class='stat-grid'>
+            <div class='stat-card'>
+                <div class='stat-val'>${market['price_ounce_usd']:,.0f}</div>
+                <div class='stat-lbl'>Int'l Ounce</div>
+            </div>
+            <div class='stat-card'>
+                <div class='stat-val'>Rs {market['usd_to_pkr']:.2f}</div>
+                <div class='stat-lbl'>USD Rate</div>
+            </div>
         </div>
-
-        <div class='stat-card'>
-            <div class='stat-val'>Rs {market['usd_to_pkr']:.2f}</div>
-            <div class='stat-lbl'>USD Rate</div>
-        </div>
-    </div>
     """, unsafe_allow_html=True)
 
-# --- 5. ADMIN PANEL (Hidden & Secure) ---
+# --- 5. ADMIN PANEL (FIXED ADD/SUB) ---
 st.sidebar.markdown("---")
-with st.sidebar.expander("🔒 Admin Panel"):
-    pwd = st.text_input("Access Key", type="password")
+with st.sidebar.expander("🔒 Admin"):
+    pwd = st.text_input("Key", type="password")
     
     if pwd == "123123":
-        st.success("Welcome, Owner")
+        st.success("Unlocked")
         
-        # Initialize Memory
+        # 1. Initialize Memory (So numbers don't reset)
         if 'admin_premium' not in st.session_state:
             st.session_state.admin_premium = int(manual['premium'])
 
+        # 2. Helper Functions
         def change_val(amount):
             st.session_state.admin_premium += amount
 
-        # Calculator Buttons
+        # 3. CALCULATOR BUTTONS
         c1, c2, c3, c4 = st.columns(4)
         with c1: st.button("-500", on_click=change_val, args=(-500,))
         with c2: st.button("-100", on_click=change_val, args=(-100,))
         with c3: st.button("+100", on_click=change_val, args=(100,))
         with c4: st.button("+500", on_click=change_val, args=(500,))
 
-        # Input Box
-        new_prem = st.number_input("Profit Margin", key="admin_premium", step=100)
+        # 4. The "Sticky" Input Box
+        new_prem = st.number_input("Profit", key="admin_premium", step=100)
         
-        # Update Button
-        if st.button("🚀 UPDATE LIVE RATE"):
+        # 5. Update Button
+        if st.button("🚀 UPDATE PRICE", type="primary"):
             try:
                 g = Github(st.secrets["GIT_TOKEN"])
                 repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
@@ -222,10 +158,11 @@ with st.sidebar.expander("🔒 Admin Panel"):
                     "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
                     "valid_hours": 4
                 }
+                # Save to GitHub
                 try: repo.update_file("manual.json", "Upd", json.dumps(data), repo.get_contents("manual.json").sha)
                 except: repo.create_file("manual.json", "Init", json.dumps(data))
                 
-                st.success("✅ Updated! Refreshing...")
+                st.success("Saved! Refreshing...")
                 time.sleep(2)
                 st.rerun()
             except Exception as e:
