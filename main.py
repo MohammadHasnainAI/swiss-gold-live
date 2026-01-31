@@ -5,191 +5,213 @@ from github import Github
 from datetime import datetime
 import pytz
 
-# --- CONFIGURATION (Must be first) ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
 
-# --- LUXURY DARK THEME CSS ---
+# --- 2. 2026 FUTURISTIC CSS ---
 st.markdown("""
     <style>
-        /* Import Elegant Font */
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Lato:wght@300;400&display=swap');
-        
-        /* 1. Background & Main Colors */
+        /* Import Modern Font (Poppins) */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap');
+
+        /* MAIN BACKGROUND */
         .stApp {
-            background-color: #0e0e0e;
-            background-image: radial-gradient(circle at 50% 0%, #1a1a1a 0%, #000000 100%);
-            color: #d4af37; /* Gold Color */
-        }
-        
-        /* 2. Typography */
-        h1, h2, h3 {
-            font-family: 'Playfair Display', serif !important;
-            color: #d4af37 !important;
-            text-align: center;
-        }
-        p, div {
-            font-family: 'Lato', sans-serif;
+            background-color: #050505;
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+            color: white;
+            font-family: 'Poppins', sans-serif;
         }
 
-        /* 3. The Main Gold Price Card (Glass Effect) */
-        .gold-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(212, 175, 55, 0.3);
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
-            margin: 20px 0;
-            animation: fadeIn 1.5s ease-in-out;
+        /* HIDE DEFAULT MENU */
+        #MainMenu, header, footer {visibility: hidden;}
+
+        /* ANIMATED GOLD TEXT (Shimmer Effect) */
+        @keyframes shimmer {
+            0% {background-position: -200% center;}
+            100% {background-position: 200% center;}
         }
-        
-        /* 4. Price Text */
-        .big-price {
-            font-size: 80px;
-            font-weight: 700;
-            background: -webkit-linear-gradient(#fff, #d4af37);
+        .gold-title {
+            font-size: 45px;
+            font-weight: 800;
+            text-align: center;
+            text-transform: uppercase;
+            background: linear-gradient(to right, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C);
+            background-size: 200% auto;
+            color: #000;
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin: 10px 0;
-        }
-        
-        /* 5. Small Info Cards */
-        .info-box {
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-            color: #888;
-        }
-        .info-value {
-            color: #fff;
-            font-size: 24px;
-            font-weight: bold;
+            animation: shimmer 3s linear infinite;
+            margin-bottom: 5px;
+            letter-spacing: 2px;
         }
 
-        /* 6. Animations */
-        @keyframes fadeIn {
-            0% { opacity: 0; transform: translateY(20px); }
-            100% { opacity: 1; transform: translateY(0); }
-        }
-        
-        /* 7. Hide Streamlit Elements */
-        #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
-        footer {visibility: hidden;}
-        
-        /* 8. Status Badges */
-        .status-live {
-            color: #28a745;
-            letter-spacing: 2px;
+        /* SUBTITLE */
+        .subtitle {
+            text-align: center;
+            color: #888;
             font-size: 14px;
-            font-weight: bold;
+            letter-spacing: 4px;
+            margin-bottom: 40px;
             text-transform: uppercase;
         }
-        .status-expired {
-            color: #dc3545;
-            letter-spacing: 2px;
-            font-size: 14px;
-            font-weight: bold;
-            text-transform: uppercase;
+
+        /* GLASS CARDS (The "2026" Look) */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 215, 0, 0.15);
+            border-radius: 24px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            margin-bottom: 20px;
         }
+
+        /* PULSING LIVE DOT */
+        @keyframes pulse-red {
+            0% {box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7);}
+            70% {box-shadow: 0 0 0 10px rgba(255, 82, 82, 0);}
+            100% {box-shadow: 0 0 0 0 rgba(255, 82, 82, 0);}
+        }
+        @keyframes pulse-green {
+            0% {box-shadow: 0 0 0 0 rgba(50, 205, 50, 0.7);}
+            70% {box-shadow: 0 0 0 10px rgba(50, 205, 50, 0);}
+            100% {box-shadow: 0 0 0 0 rgba(50, 205, 50, 0);}
+        }
+        .dot-live {
+            height: 12px;
+            width: 12px;
+            background-color: #32cd32;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse-green 2s infinite;
+            margin-right: 8px;
+        }
+        .dot-closed {
+            height: 12px;
+            width: 12px;
+            background-color: #ff5252;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse-red 2s infinite;
+            margin-right: 8px;
+        }
+
+        /* BIG PRICE */
+        .price-tag {
+            font-size: 65px;
+            font-weight: 700;
+            color: #fff;
+            margin: 10px 0;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+
+        /* SMALL INFO BOXES */
+        .stat-box {
+            background: rgba(0,0,0,0.5);
+            border-radius: 15px;
+            padding: 15px;
+            border: 1px solid #333;
+        }
+        .stat-label { font-size: 11px; color: #aaa; letter-spacing: 1px; }
+        .stat-val { font-size: 20px; font-weight: 600; color: #FFD700; }
+
     </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER FUNCTIONS ---
-def get_time_pk():
-    return datetime.now(pytz.timezone('Asia/Karachi'))
+# --- 3. LOGIC & DATA ---
+def get_time(): return datetime.now(pytz.timezone('Asia/Karachi'))
 
 def load_data():
     try:
-        with open("prices.json", "r") as f:
-            market = json.load(f)
-    except:
-        market = {"price_ounce_usd": 0, "usd_to_pkr": 0}
-
+        with open("prices.json", "r") as f: m = json.load(f)
+    except: m = {"price_ounce_usd": 0, "usd_to_pkr": 0}
     try:
-        with open("manual.json", "r") as f:
-            manual = json.load(f)
-    except:
-        manual = {"premium": 0, "last_updated": "2000-01-01 00:00:00", "valid_hours": 4}
-    return market, manual
+        with open("manual.json", "r") as f: a = json.load(f)
+    except: a = {"premium": 0, "last_updated": "2000-01-01 00:00:00", "valid_hours": 4}
+    return m, a
 
-# --- DATA LOADING ---
 market, manual = load_data()
-last_update_str = manual.get("last_updated", "2000-01-01 00:00:00")
-last_update_dt = pytz.timezone('Asia/Karachi').localize(datetime.strptime(last_update_str, "%Y-%m-%d %H:%M:%S"))
-current_time = get_time_pk()
-is_expired = (current_time - last_update_dt).total_seconds() / 3600 > manual.get("valid_hours", 4)
+last_up_str = manual.get("last_updated", "2000-01-01 00:00:00")
+last_up_dt = pytz.timezone('Asia/Karachi').localize(datetime.strptime(last_up_str, "%Y-%m-%d %H:%M:%S"))
+is_expired = (get_time() - last_up_dt).total_seconds() / 3600 > manual.get("valid_hours", 4)
 
-ounce = market['price_ounce_usd']
-usd_pkr = market['usd_to_pkr']
-premium = manual['premium']
-pak_tola = ((ounce / 31.1035) * 11.66 * usd_pkr) + premium
+# Calculations
+pk_rate = ((market['price_ounce_usd'] / 31.1035) * 11.66 * market['usd_to_pkr']) + manual['premium']
 
-# --- MAIN UI ---
+# --- 4. MAIN DISPLAY ---
 
-# 1. Logo/Header
-st.markdown("<br><h1 style='font-size: 50px;'>ISLAM JEWELLERY</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #888; letter-spacing: 3px;'>EST. 1990 • SARAFA BAZAR</p>", unsafe_allow_html=True)
+# Header
+st.markdown("<div class='gold-title'>ISLAM JEWELLERY</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>PREMIUM GOLD & BULLION • SARAFA BAZAR</div>", unsafe_allow_html=True)
 
-# 2. Main Content
 if is_expired:
-    st.markdown("""
-        <div class='gold-card' style='border-color: #dc3545;'>
-            <div class='status-expired'>● MARKET CLOSED</div>
-            <div class='big-price' style='-webkit-text-fill-color: #555; font-size: 40px;'>Rate Pending</div>
-            <p>Please contact us for the latest rates.</p>
-            <h3>📞 0300-1234567</h3>
-        </div>
-    """, unsafe_allow_html=True)
-else:
+    # --- CLOSED STATE ---
     st.markdown(f"""
-        <div class='gold-card'>
-            <div class='status-live'>● LIVE MARKET RATE</div>
-            <div style='margin-top: 10px; color: #888;'>24K GOLD PER TOLA</div>
-            <div class='big-price'>Rs {pak_tola:,.0f}</div>
-            <p style='color: #666; font-size: 12px;'>UPDATED: {last_update_str} (PKT)</p>
+        <div class='glass-card' style='border-color: #ff5252;'>
+            <div style='color: #ff5252; font-weight: bold; letter-spacing: 2px;'>
+                <span class='dot-closed'></span>MARKET CLOSED
+            </div>
+            <div style='font-size: 40px; color: #555; margin: 20px 0;'>Rate Pending</div>
+            <p style='color: #aaa;'>Rates are currently being updated.</p>
+            <div style='background: #222; padding: 10px; border-radius: 10px; margin-top: 15px; display: inline-block;'>
+                📞 0300-1234567
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
-    # 3. Small Details (Grid)
+else:
+    # --- LIVE STATE ---
+    st.markdown(f"""
+        <div class='glass-card'>
+            <div style='color: #32cd32; font-weight: bold; letter-spacing: 2px;'>
+                <span class='dot-live'></span>LIVE MARKET
+            </div>
+            <div style='color: #888; font-size: 14px; margin-top: 5px;'>24K PURE GOLD (PER TOLA)</div>
+            
+            <div class='price-tag'>Rs {pk_rate:,.0f}</div>
+            
+            <div style='color: #666; font-size: 12px; margin-top: 10px;'>
+                Updated: {last_up_str}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Small Stats Grid
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f"<div class='info-box'><div style='font-size:12px;'>INTERNATIONAL OUNCE</div><div class='info-value'>${ounce:,.0f}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='stat-box'>
+            <div class='stat-label'>INT'L OUNCE</div>
+            <div class='stat-val'>${market['price_ounce_usd']:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
     with c2:
-        st.markdown(f"<div class='info-box'><div style='font-size:12px;'>DOLLAR RATE</div><div class='info-value'>Rs {usd_pkr:.2f}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='stat-box'>
+            <div class='stat-label'>USD TO PKR</div>
+            <div class='stat-val'>Rs {market['usd_to_pkr']:.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# --- SECRET ADMIN PANEL (Invisible) ---
+# --- 5. HIDDEN ADMIN (GEAR ICON) ---
 st.sidebar.markdown("---")
-# We use an 'expander' with a Lock icon. It looks like a tiny button.
-with st.sidebar.expander("🔒 Admin Access"):
-    password = st.text_input("Key", type="password")
-    if password == "123123":
-        st.success("Authorized")
-        
-        # Admin Controls
-        new_premium = st.number_input("Profit/Premium", value=int(premium), step=500)
-        valid_hours = st.slider("Hours Valid", 1, 24, 4)
-        
-        if st.button("Update Price"):
+with st.sidebar.expander("⚙️ Settings"): # Subtle gear icon
+    pwd = st.text_input("Access Key", type="password")
+    if pwd == "123123":
+        st.success("Unlocked")
+        new_prem = st.number_input("Profit (PKR)", value=int(manual['premium']), step=100)
+        hours = st.slider("Hours Valid", 1, 24, 4)
+        if st.button("Update"):
             try:
                 g = Github(st.secrets["GIT_TOKEN"])
-                repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
-                save_data = {
-                    "premium": new_premium,
-                    "last_updated": get_time_pk().strftime("%Y-%m-%d %H:%M:%S"),
-                    "valid_hours": valid_hours
-                }
-                # Save to GitHub
-                try:
-                    contents = repo.get_contents("manual.json")
-                    repo.update_file(contents.path, "Update", json.dumps(save_data), contents.sha)
-                except:
-                    repo.create_file("manual.json", "Init", json.dumps(save_data))
-                st.success("Updated! Refreshing...")
-                time.sleep(2)
+                r = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+                data = {"premium": new_prem, "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"), "valid_hours": hours}
+                try: r.update_file("manual.json", "Upd", json.dumps(data), r.get_contents("manual.json").sha)
+                except: r.create_file("manual.json", "Init", json.dumps(data))
                 st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
+            except: st.error("Token Error")
