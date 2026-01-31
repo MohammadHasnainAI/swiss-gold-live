@@ -14,14 +14,14 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(
     page_title="Islam Jewellery",
     page_icon="💎",
-    layout="wide"
+    layout="centered"
 )
 
-# Auto-refresh every 30 seconds (10s is too fast for GitHub limits)
+# Auto-refresh every 30 seconds
 st_autorefresh(interval=30000, key="gold_refresh")
 
 # -------------------------------
-# 2. CSS STYLING (European Clean)
+# 2. CSS STYLING (FIXED SPACING)
 # -------------------------------
 st.markdown("""
 <style>
@@ -48,15 +48,38 @@ st.markdown("""
 .stat-value {font-size:1.4rem; font-weight:700; color:#d4af37;}
 .stat-label {font-size:0.75rem; color:#999; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-top:5px;}
 
-/* Buttons */
-.btn-grid {display:flex; gap:20px; margin-top:30px; justify-content:center;}
-.contact-btn {flex:1; padding:15px; border-radius:12px; text-align:center; text-decoration:none; font-weight:600; transition:transform 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.05);}
+/* Buttons (FIXED SPACING) */
+.btn-grid {
+    display: flex; 
+    gap: 20px; /* Space between buttons */
+    margin-top: 30px; 
+    justify-content: center;
+}
+.contact-btn {
+    flex: 1; 
+    padding: 15px; 
+    border-radius: 12px; 
+    text-align: center; 
+    text-decoration: none; 
+    font-weight: 600; 
+    transition: transform 0.2s; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    margin: 0 5px; /* Extra safety margin */
+}
 .btn-call {background-color:#111; color:white !important;}
 .btn-whatsapp {background-color:#25D366; color:white !important;}
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
 
 /* Footer */
-.footer {background:#f9f9f9; padding:25px; text-align:center; font-size:0.85rem; color:#555; margin-top:50px; border-top:1px solid #eee;}
+.footer {
+    background:#f9f9f9; 
+    padding:25px; 
+    text-align:center; 
+    font-size:0.85rem; 
+    color:#555; 
+    margin-top:50px; 
+    border-top:1px solid #eee;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -133,7 +156,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 6. CONTACT BUTTONS
+# 6. CONTACT BUTTONS (Fixed Spacing)
 # -------------------------------
 st.markdown("""
 <div class="btn-grid">
@@ -151,7 +174,7 @@ if "admin_authenticated" not in st.session_state:
 if st.session_state.admin_authenticated:
     if st.button("Logout Admin"):
         st.session_state.admin_authenticated = False
-        st.rerun()  # FIXED: Updated from experimental_rerun
+        st.rerun()
 else:
     with st.expander("Admin Login"):
         key_input = st.text_input("Enter Admin Access Key", type="password")
@@ -159,7 +182,7 @@ else:
             if key_input == "123123":
                 st.session_state.admin_authenticated = True
                 st.success("Access Granted")
-                st.rerun() # FIXED
+                st.rerun()
             else:
                 st.error("Incorrect Key")
 
@@ -172,7 +195,6 @@ if st.session_state.admin_authenticated:
     
     tab1, tab2, tab3, tab4 = st.tabs(["Update Prices", "Stats", "History", "Gold Chart"])
 
-    # TAB 1: Update
     with tab1:
         if "admin_premium" not in st.session_state:
             st.session_state.admin_premium = manual["premium"]
@@ -189,7 +211,6 @@ if st.session_state.admin_authenticated:
                 g = Github(st.secrets["GIT_TOKEN"])
                 repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
                 
-                # 1. Update Manual.json
                 data = {
                     "premium": st.session_state.admin_premium,
                     "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
@@ -201,7 +222,7 @@ if st.session_state.admin_authenticated:
                 except:
                     repo.create_file("manual.json", "Init", json.dumps(data))
 
-                # 2. Update History.json
+                # Update History
                 try:
                     contents = repo.get_contents("history.json")
                     history = json.loads(contents.decoded_content.decode())
@@ -215,9 +236,7 @@ if st.session_state.admin_authenticated:
                     "price_ounce_usd": market["price_ounce_usd"]
                 })
 
-                # Keep only last 50 records to save space
-                if len(history) > 50:
-                    history = history[-50:]
+                if len(history) > 50: history = history[-50:]
 
                 try:
                     contents = repo.get_contents("history.json")
@@ -231,12 +250,10 @@ if st.session_state.admin_authenticated:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    # TAB 2: Stats
     with tab2:
         st.metric("Current Premium", f"Rs {manual['premium']}")
         st.metric("USD Rate", f"Rs {market['usd_to_pkr']}")
 
-    # TAB 3: History Data
     with tab3:
         try:
             g = Github(st.secrets["GIT_TOKEN"])
@@ -248,7 +265,6 @@ if st.session_state.admin_authenticated:
         except:
             st.info("No history found.")
 
-    # TAB 4: Chart
     with tab4:
         try:
             if 'df' in locals() and not df.empty:
@@ -265,11 +281,11 @@ if st.session_state.admin_authenticated:
             st.info("Chart data unavailable.")
 
 # -------------------------------
-# 9. DISCLAIMER
+# 9. DISCLAIMER (FIXED TEXT)
 # -------------------------------
 st.markdown("""
 <div class="footer">
-**Islam Jewellery** • Sarafa Bazar <br>
+<b>Islam Jewellery</b> • Sarafa Bazar <br>
 ⚠️ Prices are indicative and subject to market changes. Verify before booking.
 </div>
 """, unsafe_allow_html=True)
