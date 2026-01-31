@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 import pandas as pd
 import altair as alt
+from streamlit_autorefresh import st_autorefresh
 
 # -------------------------------
 # 1. CONFIG
@@ -13,55 +14,49 @@ import altair as alt
 st.set_page_config(
     page_title="Islam Jewellery",
     page_icon="💎",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 # -------------------------------
-# 2. CSS STYLING
+# 2. AUTO REFRESH EVERY 10 SEC
+# -------------------------------
+st_autorefresh(interval=10*1000, key="gold_refresh")
+
+# -------------------------------
+# 3. CSS STYLING
 # -------------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 
-.stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
+.stApp {background-color:#ffffff; font-family:'Outfit', sans-serif; color:#333;}
 #MainMenu, footer, header {visibility:hidden;}
 
-/* CENTER CONTENT */
-.centered {display:flex; justify-content:center; flex-direction:column; align-items:center;}
+.header-box {text-align:center; padding-bottom:20px; border-bottom:1px solid #f0f0f0; margin-bottom:30px;}
+.brand-title {font-size:3rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:5px; text-transform:uppercase;}
+.brand-subtitle {font-size:0.9rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
 
-/* HEADER */
-.header-box {text-align:center; padding:20px 0; margin-bottom:30px;}
-.brand-title {font-size:3rem; font-weight:800; color:#111; margin-bottom:5px;}
-.brand-subtitle {font-size:1rem; color:#d4af37; font-weight:600;}
+.price-card {background:#ffffff; border-radius:20px; padding:40px 20px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.08); border:1px solid #f5f5f5; margin-bottom:30px;}
+.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:8px 16px; border-radius:30px; font-weight:700; font-size:0.8rem; letter-spacing:1px; display:inline-block; margin-bottom:20px;}
+.closed-badge {background-color:#fce8e6; color:#c5221f; padding:8px 16px; border-radius:30px; font-weight:700; font-size:0.8rem; letter-spacing:1px; display:inline-block; margin-bottom:20px;}
+.big-price {font-size:4.5rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-2px;}
+.price-label {font-size:1rem; color:#666; font-weight:400; margin-top:10px;}
 
-/* PRICE CARD */
-.price-card {background:#ffffff; border-radius:20px; padding:50px 40px; text-align:center; box-shadow:0 15px 40px rgba(0,0,0,0.1); margin-bottom:30px;}
-.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:8px 18px; border-radius:30px; font-weight:700; font-size:0.85rem; display:inline-block; margin-bottom:20px;}
-.closed-badge {background-color:#fce8e6; color:#c5221f; padding:8px 18px; border-radius:30px; font-weight:700; font-size:0.85rem; display:inline-block; margin-bottom:20px;}
-.big-price {font-size:4rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-1px;}
-.price-label {font-size:1rem; color:#666; font-weight:500; margin-top:10px;}
+.stats-container {display:flex; gap:15px; margin-top:20px;}
+.stat-box {flex:1; background:#fafafa; border-radius:15px; padding:20px; text-align:center; border:1px solid #eeeeee;}
+.stat-value {font-size:1.4rem; font-weight:700; color:#d4af37;}
+.stat-label {font-size:0.75rem; color:#999; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-top:5px;}
 
-/* STATS */
-.stats-container {display:flex; gap:20px; justify-content:center; margin-bottom:30px;}
-.stat-box {flex:1; background:#ffffff; border-radius:15px; padding:20px; text-align:center; box-shadow:0 5px 20px rgba(0,0,0,0.05);}
-.stat-value {font-size:1.5rem; font-weight:700; color:#d4af37;}
-.stat-label {font-size:0.85rem; color:#777; font-weight:600; margin-top:5px;}
-
-/* CONTACT BUTTONS */
-.btn-grid {display:flex; gap:15px; margin-bottom:40px;}
-.contact-btn {flex:1; padding:15px; border-radius:12px; text-align:center; text-decoration:none; font-weight:600; transition:0.2s; box-shadow:0 5px 15px rgba(0,0,0,0.05);}
+.btn-grid {display:flex; gap:15px; margin-top:30px;}
+.contact-btn {flex:1; padding:15px; border-radius:12px; text-align:center; text-decoration:none; font-weight:600; transition:transform 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.05);}
 .btn-call {background-color:#111; color:white !important;}
 .btn-whatsapp {background-color:#25D366; color:white !important;}
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
-
-/* DISCLAIMER */
-.disclaimer {background:#ffffff; border-radius:20px; padding:25px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.05); margin-top:40px;}
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 3. DATA LOGIC
+# 4. DATA LOGIC
 # -------------------------------
 def get_time():
     return datetime.now(pytz.timezone("Asia/Karachi"))
@@ -80,6 +75,7 @@ def load_data():
     return market, manual
 
 market, manual = load_data()
+
 last_str = manual.get("last_updated", "2000-01-01 00:00:00")
 last_dt = pytz.timezone("Asia/Karachi").localize(datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S"))
 current_time = get_time()
@@ -87,21 +83,9 @@ is_expired = (current_time - last_dt).total_seconds() / 3600 > manual.get("valid
 pk_price = ((market["price_ounce_usd"] / 31.1035) * 11.66 * market["usd_to_pkr"]) + manual["premium"]
 
 # -------------------------------
-# 4. AUTO-REFRESH EVERY 10 SECONDS
+# 5. MAIN WEBSITE DISPLAY
 # -------------------------------
-st_autorefresh = st.experimental_rerun
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = time.time()
-
-if time.time() - st.session_state.last_refresh > 10:
-    st.session_state.last_refresh = time.time()
-    st.experimental_rerun()
-
-# -------------------------------
-# 5. MAIN WEBSITE DISPLAY (CENTERED)
-# -------------------------------
-st.markdown('<div class="centered">', unsafe_allow_html=True)
-st.markdown(f"""
+st.markdown("""
 <div class="header-box">
     <div class="brand-title">Islam Jewellery</div>
     <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
@@ -115,7 +99,7 @@ if is_expired:
         <div class="closed-badge">● MARKET CLOSED</div>
         <div class="big-price" style="color:#ccc;">PENDING</div>
         <div class="price-label">Waiting for Rate Update</div>
-        <div style="font-size:0.85rem; color:#aaa; margin-top:10px;">Last: {last_str}</div>
+        <div style="font-size:0.8rem; color:#aaa; margin-top:15px;">Last: {last_str}</div>
     </div>
     """, unsafe_allow_html=True)
 else:
@@ -124,7 +108,7 @@ else:
         <div class="live-badge">● LIVE RATE</div>
         <div class="big-price">Rs {pk_price:,.0f}</div>
         <div class="price-label">24K Gold Per Tola</div>
-        <div style="font-size:0.85rem; color:#aaa; margin-top:10px;">Updated: {last_str}</div>
+        <div style="font-size:0.8rem; color:#aaa; margin-top:15px;">Updated: {last_str}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -139,10 +123,6 @@ st.markdown(f"""
         <div class="stat-value">Rs {market['usd_to_pkr']:.2f}</div>
         <div class="stat-label">USD Rate</div>
     </div>
-    <div class="stat-box">
-        <div class="stat-value">Rs {manual['premium']}</div>
-        <div class="stat-label">Admin Premium</div>
-    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -154,17 +134,19 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
-
 # -------------------------------
-# 6. ADMIN LOGIN / DASHBOARD
+# 6. ADMIN LOGIN & LOGOUT
 # -------------------------------
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
-with st.sidebar:
+if st.session_state.admin_authenticated:
+    if st.button("🔒 Logout Admin"):
+        st.session_state.admin_authenticated = False
+        st.experimental_rerun()
+
+with st.expander("Admin Login"):
     if not st.session_state.admin_authenticated:
-        st.header("Admin Login")
         key_input = st.text_input("Enter Admin Access Key", type="password")
         if st.button("Login"):
             if key_input == "123123":
@@ -172,16 +154,12 @@ with st.sidebar:
                 st.success("Admin Access Granted ✅")
             else:
                 st.error("Incorrect Key ❌")
-    else:
-        st.header("Admin Panel")
-        if st.button("Logout"):
-            st.session_state.admin_authenticated = False
-            st.success("Logged out successfully ✅")
 
 # -------------------------------
-# 7. FULL-WIDTH ADMIN DASHBOARD
+# 7. ADMIN DASHBOARD
 # -------------------------------
 if st.session_state.admin_authenticated:
+    st.markdown("---")
     st.title("⚙️ Admin Dashboard")
     tabs = st.tabs(["Update Prices", "Stats", "History", "Gold Price Chart"])
 
@@ -199,18 +177,20 @@ if st.session_state.admin_authenticated:
             try:
                 g = Github(st.secrets["GIT_TOKEN"])
                 repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+
                 data = {
                     "premium": st.session_state.admin_premium,
                     "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
                     "valid_hours": 4
                 }
+
                 try:
                     contents = repo.get_contents("manual.json")
                     repo.update_file(contents.path, "Update", json.dumps(data), contents.sha)
                 except:
                     repo.create_file("manual.json", "Init", json.dumps(data))
 
-                # History
+                # Update history
                 try:
                     contents = repo.get_contents("history.json")
                     history = json.loads(contents.decoded_content.decode())
@@ -254,13 +234,13 @@ if st.session_state.admin_authenticated:
 
         if history:
             df = pd.DataFrame(history)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df)
         else:
             st.info("No history yet.")
 
     # --- TAB 4: Gold Price Chart ---
     with tabs[3]:
-        st.subheader("Gold Price Trend")
+        st.subheader("Gold Price Trend (Last Updates)")
         if history:
             df = pd.DataFrame(history)
             df['last_updated'] = pd.to_datetime(df['last_updated'])
@@ -268,23 +248,22 @@ if st.session_state.admin_authenticated:
                 x='last_updated:T',
                 y='price_ounce_usd:Q',
                 tooltip=['last_updated:T','price_ounce_usd:Q','usd_to_pkr:Q','premium:Q']
-            ).properties(width=1000, height=400)
+            ).properties(width=900, height=400)
             st.altair_chart(chart)
         else:
             st.info("No data to show.")
 
 # -------------------------------
-# 8. WEBSITE INFO / DISCLAIMER (BOTTOM)
+# 8. WEBSITE INFO / DISCLAIMER
 # -------------------------------
-st.markdown('<div class="disclaimer">', unsafe_allow_html=True)
+st.markdown("---")
 st.subheader("Website Info & Disclaimer")
 st.markdown("""
 **Islam Jewellery** shows approximate gold prices.  
-Prices are updated using market data and admin premium.  
+Prices update based on market data & admin-set premium.  
 
 ⚠️ **Disclaimer:**  
-- Prices are indicative and may change anytime.  
-- Verify with the shop before buying.  
-- Contact shop for confirmed gold rates.
+- Prices are indicative & may change anytime.  
+- Always verify with the shop before buying.  
+- Contact shop directly for confirmed gold rates.
 """)
-st.markdown('</div>', unsafe_allow_html=True)
