@@ -5,278 +5,310 @@ from github import Github
 from datetime import datetime
 import pytz
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
+# -------------------------------
+# CONFIG
+# -------------------------------
+st.set_page_config(
+    page_title="Islam Jewellery",
+    page_icon="💎",
+    layout="centered"
+)
 
-# --- 2. EUROPEAN CLEAN CSS ---
+# -------------------------------
+# PREMIUM EUROPEAN UI CSS
+# -------------------------------
 st.markdown("""
-    <style>
-        /* Import Clean Sans-Serif Font */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
-        /* MAIN BACKGROUND */
-        .stApp {
-            background-color: #f8f9fa; /* Very Light Grey */
-            font-family: 'Inter', sans-serif;
-            color: #212529;
-        }
+.stApp {
+    background: #f6f7fb;
+    font-family: 'Inter', sans-serif;
+    color: #111;
+}
 
-        /* HIDE DEFAULT ELEMENTS */
-        #MainMenu, header, footer {visibility: hidden;}
+#MainMenu, header, footer {
+    visibility: hidden;
+}
 
-        /* HEADER STYLES */
-        .brand-header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding-top: 20px;
-        }
-        .brand-name {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: #1a1a1a;
-            letter-spacing: -1px;
-            text-transform: uppercase;
-            margin: 0;
-        }
-        .brand-sub {
-            font-size: 0.9rem;
-            color: #6c757d;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-top: 5px;
-        }
+/* HEADER */
+.brand-header {
+    text-align: center;
+    margin-top: 15px;
+    margin-bottom: 35px;
+}
 
-        /* CARD DESIGN (Clean White Box) */
-        .euro-card {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 40px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05); /* Soft Shadow */
-            border: 1px solid #e9ecef;
-            text-align: center;
-            margin-bottom: 24px;
-        }
+.brand-logo {
+    font-size: 45px;
+    margin-bottom: 8px;
+}
 
-        /* LIVE BADGE */
-        .status-badge {
-            display: inline-block;
-            padding: 6px 16px;
-            background-color: #d1e7dd;
-            color: #0f5132;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            margin-bottom: 20px;
-        }
-        
-        .status-badge-closed {
-            display: inline-block;
-            padding: 6px 16px;
-            background-color: #f8d7da;
-            color: #842029;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
+.brand-name {
+    font-size: 2.6rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -1px;
+}
 
-        /* PRICE TYPOGRAPHY */
-        .main-price {
-            font-size: 4.5rem;
-            font-weight: 800;
-            color: #212529;
-            letter-spacing: -2px;
-            line-height: 1;
-            margin: 10px 0;
-        }
-        .price-label {
-            font-size: 1rem;
-            color: #adb5bd;
-            font-weight: 500;
-            margin-bottom: 10px;
-        }
-        .update-time {
-            font-size: 0.8rem;
-            color: #ced4da;
-            margin-top: 20px;
-        }
+.brand-sub {
+    font-size: 0.85rem;
+    color: #6c757d;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
 
-        /* STATS GRID */
-        .stats-container {
-            display: flex;
-            gap: 15px;
-        }
-        .stat-box {
-            flex: 1;
-            background: #ffffff;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #e9ecef;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-        }
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #495057;
-        }
-        .stat-title {
-            font-size: 0.75rem;
-            color: #adb5bd;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-top: 5px;
-        }
+/* MAIN CARD */
+.euro-card {
+    background: white;
+    border-radius: 18px;
+    padding: 45px;
+    border: 1px solid #eaeaea;
+    box-shadow: 0px 10px 35px rgba(0,0,0,0.06);
+    text-align: center;
+}
 
-        /* BUTTONS (Clean Blue) */
-        .action-btn {
-            display: block;
-            width: 100%;
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            color: #495057;
-            padding: 12px;
-            border-radius: 8px;
-            text-align: center;
-            text-decoration: none;
-            font-weight: 600;
-            margin-top: 10px;
-            transition: all 0.2s;
-        }
-        .action-btn:hover {
-            background-color: #f8f9fa;
-            border-color: #adb5bd;
-            color: #212529;
-        }
-        
-    </style>
+/* LIVE BADGE */
+.status-badge {
+    display: inline-block;
+    padding: 7px 18px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.live {
+    background: #e6fcf5;
+    color: #087f5b;
+}
+
+.closed {
+    background: #fff5f5;
+    color: #c92a2a;
+}
+
+/* PRICE */
+.main-price {
+    font-size: 4.8rem;
+    font-weight: 800;
+    letter-spacing: -2px;
+    margin: 10px 0;
+    color: #111;
+}
+
+.price-label {
+    font-size: 1rem;
+    color: #868e96;
+    font-weight: 600;
+}
+
+.update-time {
+    font-size: 0.8rem;
+    color: #adb5bd;
+    margin-top: 18px;
+}
+
+/* STATS */
+.stats-container {
+    display: flex;
+    gap: 15px;
+    margin-top: 18px;
+}
+
+.stat-box {
+    flex: 1;
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    border: 1px solid #eee;
+    box-shadow: 0px 5px 12px rgba(0,0,0,0.03);
+}
+
+.stat-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+
+.stat-title {
+    font-size: 0.75rem;
+    margin-top: 6px;
+    color: #868e96;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* BUTTONS */
+.action-btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 700;
+    text-decoration: none;
+    transition: 0.2s;
+}
+
+.call-btn {
+    background: #111;
+    color: white;
+}
+
+.call-btn:hover {
+    background: #333;
+}
+
+.wa-btn {
+    background: #25D366;
+    color: white;
+}
+
+.wa-btn:hover {
+    background: #1da851;
+}
+
+/* FOOTER */
+.footer {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #adb5bd;
+    margin-top: 45px;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# --- 3. LOGIC ---
-def get_time(): return datetime.now(pytz.timezone('Asia/Karachi'))
+# -------------------------------
+# FUNCTIONS
+# -------------------------------
+def get_time():
+    return datetime.now(pytz.timezone("Asia/Karachi"))
 
 def load_data():
     try:
-        with open("prices.json", "r") as f: m = json.load(f)
-    except: m = {"price_ounce_usd": 0, "usd_to_pkr": 0}
+        with open("prices.json", "r") as f:
+            market = json.load(f)
+    except:
+        market = {"price_ounce_usd": 0, "usd_to_pkr": 0}
+
     try:
-        with open("manual.json", "r") as f: a = json.load(f)
-    except: a = {"premium": 0, "last_updated": "2000-01-01 00:00:00", "valid_hours": 4}
-    return m, a
+        with open("manual.json", "r") as f:
+            manual = json.load(f)
+    except:
+        manual = {"premium": 0, "last_updated": "2000-01-01 00:00:00", "valid_hours": 4}
 
+    return market, manual
+
+# -------------------------------
+# LOAD DATA
+# -------------------------------
 market, manual = load_data()
-last_str = manual.get("last_updated", "2000-01-01 00:00:00")
-last_dt = pytz.timezone('Asia/Karachi').localize(datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S"))
+
+last_str = manual.get("last_updated")
+last_dt = pytz.timezone("Asia/Karachi").localize(
+    datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S")
+)
+
 is_expired = (get_time() - last_dt).total_seconds() / 3600 > manual.get("valid_hours", 4)
-pk_price = ((market['price_ounce_usd'] / 31.1035) * 11.66 * market['usd_to_pkr']) + manual['premium']
 
-# --- 4. DISPLAY (HTML) ---
+pk_price = ((market["price_ounce_usd"] / 31.1035) * 11.66 * market["usd_to_pkr"]) + manual["premium"]
 
-# Header
+# -------------------------------
+# HEADER
+# -------------------------------
 st.markdown("""
-    <div class='brand-header'>
-        <h1 class='brand-name'>Islam Jewellery</h1>
-        <div class='brand-sub'>Sarafa Bazar • Est. 1990</div>
-    </div>
+<div class="brand-header">
+    <div class="brand-logo">💎</div>
+    <h1 class="brand-name">Islam Jewellery</h1>
+    <div class="brand-sub">Sarafa Bazar • Est. 1990</div>
+</div>
 """, unsafe_allow_html=True)
 
+# -------------------------------
+# MAIN DISPLAY
+# -------------------------------
 if is_expired:
-    # CLOSED CARD
-    st.markdown(f"""
-        <div class='euro-card'>
-            <div class='status-badge-closed'>● Market Closed</div>
-            <div class='main-price' style='color: #dee2e6;'>Pending</div>
-            <div class='price-label'>Waiting for Daily Update</div>
-            <div style='margin-top: 20px;'>
-                <a href='tel:03001234567' class='action-btn'>📞 Call for Rates</a>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-else:
-    # LIVE CARD
-    st.markdown(f"""
-        <div class='euro-card'>
-            <div class='status-badge'>● Live Market Rate</div>
-            <div class='main-price'>Rs {pk_price:,.0f}</div>
-            <div class='price-label'>24K Gold Per Tola</div>
-            <div class='update-time'>Last Update: {last_str}</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # STATS ROW
-    st.markdown(f"""
-        <div class='stats-container'>
-            <div class='stat-box'>
-                <div class='stat-value'>${market['price_ounce_usd']:,.0f}</div>
-                <div class='stat-title'>Int'l Ounce</div>
-            </div>
-            <div class='stat-box'>
-                <div class='stat-value'>Rs {market['usd_to_pkr']:.2f}</div>
-                <div class='stat-title'>USD Rate</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # CONTACT BUTTONS
     st.markdown("""
-        <div style='display: flex; gap: 10px; margin-top: 20px;'>
-            <a href='tel:03001234567' class='action-btn'>📞 Call Now</a>
-            <a href='https://wa.me/923001234567' class='action-btn' style='color: #25D366; border-color: #25D366;'>💬 WhatsApp</a>
-        </div>
+    <div class="euro-card">
+        <div class="status-badge closed">● Market Closed</div>
+        <div class="main-price" style="color:#dee2e6;">Pending</div>
+        <div class="price-label">Waiting for Update</div>
+    </div>
     """, unsafe_allow_html=True)
 
-# --- 5. ADMIN PANEL (SIDEBAR) ---
-st.sidebar.title("⚙️ Admin")
-
-# Token Checker (Debug)
-if "GIT_TOKEN" in st.secrets:
-    st.sidebar.caption("✅ System Connected")
 else:
-    st.sidebar.error("❌ Token Missing in Secrets!")
+    st.markdown(f"""
+    <div class="euro-card">
+        <div class="status-badge live">● Live Gold Rate</div>
+        <div class="main-price">Rs {pk_price:,.0f}</div>
+        <div class="price-label">24K Gold Per Tola</div>
+        <div class="update-time">Last Updated: {last_str}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-with st.sidebar.expander("Update Prices"):
+    st.markdown(f"""
+    <div class="stats-container">
+        <div class="stat-box">
+            <div class="stat-value">${market['price_ounce_usd']:,.0f}</div>
+            <div class="stat-title">International Ounce</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-value">Rs {market['usd_to_pkr']:.2f}</div>
+            <div class="stat-title">USD Rate</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="display:flex; gap:12px; margin-top:20px;">
+        <a href="tel:03001234567" class="action-btn call-btn">📞 Call Now</a>
+        <a href="https://wa.me/923001234567" target="_blank" class="action-btn wa-btn">💬 WhatsApp</a>
+    </div>
+    """, unsafe_allow_html=True)
+
+# -------------------------------
+# FOOTER
+# -------------------------------
+st.markdown("""
+<div class="footer">
+© 2026 Islam Jewellery • Professional Live Gold Rate System
+</div>
+""", unsafe_allow_html=True)
+
+# -------------------------------
+# ADMIN PANEL
+# -------------------------------
+st.sidebar.title("⚙️ Admin Panel")
+
+with st.sidebar.expander("Update Premium"):
     pwd = st.text_input("Access Key", type="password")
-    
+
     if pwd == "123123":
-        st.sidebar.success("Unlocked")
-        
-        # Initialize Memory
-        if 'admin_premium' not in st.session_state:
-            st.session_state.admin_premium = int(manual['premium'])
 
-        def change_val(amount):
-            st.session_state.admin_premium += amount
+        if "admin_premium" not in st.session_state:
+            st.session_state.admin_premium = int(manual["premium"])
 
-        # Buttons
-        c1, c2 = st.sidebar.columns(2)
-        c1.button("-100", on_click=change_val, args=(-100,))
-        c2.button("+100", on_click=change_val, args=(100,))
-        
-        # Input
-        st.sidebar.number_input("Premium Amount", key="admin_premium", step=100)
-        
-        if st.sidebar.button("Save & Publish"):
+        st.number_input("Premium Amount", key="admin_premium", step=100)
+
+        if st.button("Save & Publish"):
             try:
                 g = Github(st.secrets["GIT_TOKEN"])
                 repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+
                 data = {
                     "premium": st.session_state.admin_premium,
                     "last_updated": get_time().strftime("%Y-%m-%d %H:%M:%S"),
                     "valid_hours": 4
                 }
-                
-                # Update File
+
                 try:
                     contents = repo.get_contents("manual.json")
                     repo.update_file(contents.path, "Update", json.dumps(data), contents.sha)
                 except:
                     repo.create_file("manual.json", "Init", json.dumps(data))
-                
-                st.sidebar.success("Done! Reloading...")
+
+                st.success("✅ Updated Successfully!")
                 time.sleep(2)
                 st.rerun()
+
             except Exception as e:
-                st.sidebar.error(f"Error: {e}")
+                st.error(f"Error: {e}")
