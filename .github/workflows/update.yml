@@ -1,0 +1,51 @@
+name: Sync Data
+on:
+  schedule:
+    - cron: '0 */8 * * *' # Every 8 hours
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - run: pip install requests
+      - name: Get Prices
+        env:
+          GOLD_KEY: ${{ secrets.GOLD_KEY }}
+          CURR_KEY: ${{ secrets.CURR_KEY }}
+        run: |
+          python -c "
+          import requests, json, time, os
+          gold_key = os.environ['GOLD_KEY']
+          curr_key = os.environ['CURR_KEY']
+          try:
+              # Fetch Gold
+              h = {'x-access-token': gold_key}
+              gold = requests.get('https://www.goldapi.io/api/XAU/USD', headers=h).json()
+              # Fetch Currency
+              curr = requests.get(f'https://v6.exchangerate-api.com/v6/{curr_key}/latest/USD').json()
+              # Save
+              data = {
+                  'timestamp': time.strftime('%d %b | %H:%M UTC'),
+                  'price_ounce_usd': gold['price'],
+                  'usd_to_pkr': curr['conversion_rates']['PKR'],
+                  'usd_to_aed': curr['conversion_rates']['AED']
+              }
+              with open('prices.json', 'w') as f:
+                  json.dump(data, f)
+          except Exception:
+              exit(1)
+          "
+      - name: Save
+        run: |
+          git config --global user.name "Bot"
+          git config --global user.email "bot@bot.com"
+          git add prices.json
+          git commit -m "Update" || exit 0
+          git push
