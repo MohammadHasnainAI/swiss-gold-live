@@ -9,18 +9,18 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V10", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V11", page_icon="💎", layout="centered")
 st_autorefresh(interval=240000, key="gold_refresh")
 
-# 2. HELPER FUNCTIONS (The Fix for Buttons)
+# 2. HELPER FUNCTIONS (STABLE STATE)
 def adjust_val(key, amount):
-    """Safely updates session state values without bugs."""
+    """Updates session state directly to prevent jumping bugs."""
     if key not in st.session_state:
-        st.session_state[key] = 0
+        st.session_state[key] = 0.0
     st.session_state[key] += amount
 
 def clear_cache():
-    """Forces a price refresh."""
+    """Forces a refresh."""
     get_live_rates.clear()
 
 # 3. DESIGN
@@ -34,7 +34,7 @@ st.markdown("""
 .brand-title {font-size:3rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:5px; text-transform:uppercase;}
 .brand-subtitle {font-size:0.9rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
 
-.price-card {background:#ffffff; border-radius:20px; padding:30px 20px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.08); border:1px solid #f5f5f5; margin-bottom:20px; position: relative;}
+.price-card {background:#ffffff; border-radius:20px; padding:30px 20px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.08); border:1px solid #f5f5f5; margin-bottom:20px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:6px 14px; border-radius:30px; font-weight:700; font-size:0.75rem; letter-spacing:1px; display:inline-block; margin-bottom:15px;}
 .big-price {font-size:3.5rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-2px;}
 .price-label {font-size:1rem; color:#666; font-weight:400; margin-top:5px;}
@@ -51,7 +51,6 @@ st.markdown("""
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
 
 .footer {background:#f9f9f9; padding:25px; text-align:center; font-size:0.85rem; color:#555; margin-top:50px; border-top:1px solid #eee; line-height: 1.6;}
-.refresh-btn {margin-top: 10px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,7 +64,7 @@ except Exception as e:
     print(f"GitHub Error: {e}")
 
 # 5. DATA ENGINE
-@st.cache_data(ttl=3600, show_spinner=False) # Cache for 1 hour, manual refresh clears it
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
         return "ERROR: Secret Keys Missing"
@@ -105,7 +104,7 @@ def get_live_rates():
     except Exception as e:
         return f"UNKNOWN ERROR: {str(e)}"
 
-# 6. LOAD DATA & SETTINGS
+# 6. INITIALIZE DATA & STATE
 live_data = get_live_rates()
 
 if isinstance(live_data, str):
@@ -120,10 +119,10 @@ if repo:
     except:
         pass
 
-# Initialize Session State for Inputs (This fixes the button bug)
-if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
-if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
-if "new_usd" not in st.session_state: st.session_state.new_usd = settings.get("usd_adj", 0.0)
+# ** FIX: INITIALIZE STATE KEYS ONCE **
+if "new_gold" not in st.session_state: st.session_state.new_gold = float(settings.get("gold_premium", 0))
+if "new_silver" not in st.session_state: st.session_state.new_silver = float(settings.get("silver_premium", 0))
+if "new_usd" not in st.session_state: st.session_state.new_usd = float(settings.get("usd_adj", 0.0))
 
 # Calculations
 final_usd_rate = live_data['usd_bank'] + settings.get("usd_adj", 0)
@@ -134,7 +133,7 @@ gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 # 7. UI DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
-# --- GOLD CARD WITH REFRESH BUTTON ---
+# --- GOLD CARD ---
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge">● GOLD LIVE</div>
@@ -145,11 +144,14 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">Rs {final_usd_rate:.2f}</div><div class="stat-label">Dollar Rate</div></div>
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai Tola</div></div>
     </div>
+    <div style="font-size:0.75rem; color:#aaa; margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+        Last Updated: <b>{live_data['time']}</b>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Refresh Button
-if st.button("🔄 Update / Refresh Price", type="secondary", use_container_width=True):
+# Update Button (Under Gold)
+if st.button("🔄 Refresh Price Now", type="secondary", use_container_width=True):
     clear_cache()
     st.rerun()
 
@@ -188,10 +190,10 @@ if st.session_state.admin_auth:
     with tabs[0]:
         st.subheader("💵 Dollar Adjustment")
         c1, c2, c3 = st.columns([1,1,2])
-        # Using on_click fixes the jumping bug
         c1.button("- 0.5", on_click=adjust_val, args=("new_usd", -0.5))
         c2.button("+ 0.5", on_click=adjust_val, args=("new_usd", 0.5))
-        st.session_state.new_usd = c3.number_input("Dollar Adj (Rs)", value=float(st.session_state.new_usd), step=0.1)
+        # Direct Key Binding (Fixes jumping)
+        st.number_input("Dollar Adj (Rs)", key="new_usd", step=0.1)
 
         st.divider()
 
@@ -201,13 +203,13 @@ if st.session_state.admin_auth:
             c1, c2, c3 = st.columns([1,1,2])
             c1.button("- 500", key="g_sub", on_click=adjust_val, args=("new_gold", -500))
             c2.button("+ 500", key="g_add", on_click=adjust_val, args=("new_gold", 500))
-            st.session_state.new_gold = c3.number_input("Gold Premium (Rs)", value=st.session_state.new_gold, step=100)
+            st.number_input("Gold Premium (Rs)", key="new_gold", step=100)
         else:
             st.subheader("⚪ Silver Premium")
             d1, d2, d3 = st.columns([1,1,2])
             d1.button("- 50", key="s_sub", on_click=adjust_val, args=("new_silver", -50))
             d2.button("+ 50", key="s_add", on_click=adjust_val, args=("new_silver", 50))
-            st.session_state.new_silver = d3.number_input("Silver Premium (Rs)", value=st.session_state.new_silver, step=50)
+            st.number_input("Silver Premium (Rs)", key="new_silver", step=50)
 
         if st.button("🚀 Publish Changes", type="primary"):
             if repo:
