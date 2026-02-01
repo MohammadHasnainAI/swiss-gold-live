@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import json
-import time
 from datetime import datetime
 import pytz
 from github import Github
@@ -14,7 +13,7 @@ st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="cente
 st_autorefresh(interval=240000, key="gold_refresh")
 
 # -------------------------------
-# 2. DESIGN (Your Theme)
+# 2. DESIGN (Your Exact Theme)
 # -------------------------------
 st.markdown("""
 <style>
@@ -42,11 +41,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 3. ROBUST DATA ENGINE
+# 3. ROBUST DATA ENGINE (DEBUGGABLE)
 # -------------------------------
 @st.cache_data(ttl=240, show_spinner=False)
 def get_live_rates():
-    # 1. Check Secrets
     if "TWELVE_DATA_KEY" not in st.secrets:
         return "ERROR: Keys missing in Secrets."
     
@@ -54,25 +52,29 @@ def get_live_rates():
     CURR_KEY = st.secrets["CURR_KEY"]
 
     try:
-        # 2. Get Gold/Silver
+        # 1. Fetch Gold/Silver
+        # We explicitly ask for JSON format
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
-        # ERROR CHECK 1: Global API Error
+        # --- SPECIAL FIX FOR 'price' ERROR ---
+        # Sometimes TwelveData returns an error INSIDE the symbol like: {"XAU/USD": {"code": 400}}
+        if "XAU/USD" in metal_res:
+            if "code" in metal_res["XAU/USD"]:
+                return f"API ERROR: {metal_res['XAU/USD'].get('message', 'Unknown Error')}"
+        
+        # Sometimes it returns a global error like: {"code": 400}
         if "code" in metal_res and metal_res["code"] == 400:
              return f"API ERROR: {metal_res['message']}"
-        
-        # ERROR CHECK 2: Specific Symbol Error (This fixes your 'price' crash)
-        if "XAU/USD" in metal_res and "code" in metal_res["XAU/USD"]:
-            return f"API LIMIT: {metal_res['XAU/USD']['message']}"
 
-        # 3. Get Currency
+        # 2. Fetch Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
         
         if "conversion_rates" not in curr_res:
             return "API ERROR: Currency Limit Reached"
 
+        # 3. Success! Return Data
         return {
             "gold": float(metal_res['XAU/USD']['price']),
             "silver": float(metal_res['XAG/USD']['price']),
@@ -88,10 +90,9 @@ def get_live_rates():
 # -------------------------------
 live_data = get_live_rates()
 
-# If error, show message but keep app alive
+# SAFE MODE: If API fails, show a warning but load DEFAULT prices so site doesn't crash
 if isinstance(live_data, str):
     st.warning(f"⚠️ {live_data}")
-    # Use Safe Default Data if API fails
     live_data = {"gold": 2750.0, "silver": 32.5, "usd": 278.0, "aed": 75.0, "time": "Offline Mode"}
 
 # Load Settings
