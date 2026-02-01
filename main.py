@@ -36,10 +36,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. CRASH-PROOF ENGINE
+# 3. GLOBAL VARIABLES
+repo = None  # Fixes 'repo not defined' error
+
+# 4. GITHUB CONNECTION (Try to connect immediately)
+try:
+    if "GIT_TOKEN" in st.secrets:
+        g = Github(st.secrets["GIT_TOKEN"])
+        repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+except Exception as e:
+    st.error(f"GitHub Connection Failed: {e}")
+
+# 5. DATA ENGINE
 @st.cache_data(ttl=240, show_spinner=False)
 def get_live_rates():
-    # A. Check Keys
     if "TWELVE_DATA_KEY" not in st.secrets:
         return "ERROR: Secret Keys Missing"
     
@@ -47,16 +57,17 @@ def get_live_rates():
     CURR_KEY = st.secrets["CURR_KEY"]
 
     try:
-        # B. Get Gold (Safe Mode)
+        # A. Get Gold
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
-        # --- DEBUGGER ---
-        # If 'price' is missing, return the RAW message so we can see it on screen
-        if "XAU/USD" not in metal_res or "price" not in metal_res["XAU/USD"]:
-            return f"API SAYS: {json.dumps(metal_res)}"
+        # DEBUG: If 'price' is missing, return the WHOLE message so we can see it
+        if "XAU/USD" not in metal_res:
+            return f"API ERROR: {json.dumps(metal_res)}"
+        if "price" not in metal_res["XAU/USD"]:
+            return f"API ERROR: {json.dumps(metal_res)}"
 
-        # C. Get Currency (Safe Mode)
+        # B. Get Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
         
@@ -73,33 +84,32 @@ def get_live_rates():
     except Exception as e:
         return f"UNKNOWN ERROR: {str(e)}"
 
-# 4. LOAD DATA
+# 6. LOAD DATA
 live_data = get_live_rates()
 
-# 5. ERROR CATCHER (If API fails, use Manual Data)
+# 7. ERROR HANDLING (Prevents Crash)
 if isinstance(live_data, str):
     st.warning(f"⚠️ {live_data}")
-    # FALLBACK: Use these numbers so the site DOES NOT CRASH
-    live_data = {"gold": 2750.0, "silver": 32.5, "usd": 278.0, "aed": 75.0, "time": "System Offline"}
+    # Use Manual Fallback Data
+    live_data = {"gold": 2750.0, "silver": 32.5, "usd": 278.0, "aed": 75.0, "time": "Offline Mode"}
 
-# 6. LOAD SETTINGS
-try:
-    g = Github(st.secrets["GIT_TOKEN"])
-    repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
-    content = repo.get_contents("manual.json")
-    settings = json.loads(content.decoded_content.decode())
-except:
-    settings = {"gold_premium": 0, "silver_premium": 0}
+# 8. LOAD SETTINGS
+settings = {"gold_premium": 0, "silver_premium": 0}
+if repo:
+    try:
+        content = repo.get_contents("manual.json")
+        settings = json.loads(content.decoded_content.decode())
+    except:
+        pass # Use default if file missing
 
-# 7. CALCULATIONS
+# 9. CALCULATIONS
 gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
 gold_dubai = (live_data['gold'] / 31.1035) * live_data['aed']
 
-# 8. UI
+# 10. UI DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
-# CARDS
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge">● GOLD LIVE</div>
@@ -121,10 +131,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# BUTTONS
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# ADMIN
+# 11. ADMIN PANEL (Fixed)
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -140,15 +149,19 @@ if st.session_state.admin_auth:
     c1, c2 = st.columns(2)
     st.session_state.new_gold = c1.number_input("Gold Premium", value=st.session_state.new_gold, step=100)
     st.session_state.new_silver = c2.number_input("Silver Premium", value=st.session_state.new_silver, step=50)
+    
     if st.button("💾 Save to GitHub"):
-        try:
-            new_settings = {"gold_premium": st.session_state.new_gold, "silver_premium": st.session_state.new_silver}
+        if repo:
             try:
-                contents = repo.get_contents("manual.json")
-                repo.update_file(contents.path, "Update Settings", json.dumps(new_settings), contents.sha)
-            except:
-                repo.create_file("manual.json", "Init Settings", json.dumps(new_settings))
-            st.success("✅ Saved!"); st.rerun()
-        except Exception as e: st.error(f"GitHub Error: {e}")
+                new_settings = {"gold_premium": st.session_state.new_gold, "silver_premium": st.session_state.new_silver}
+                try:
+                    contents = repo.get_contents("manual.json")
+                    repo.update_file(contents.path, "Update Settings", json.dumps(new_settings), contents.sha)
+                except:
+                    repo.create_file("manual.json", "Init Settings", json.dumps(new_settings))
+                st.success("✅ Saved!"); st.rerun()
+            except Exception as e: st.error(f"GitHub Error: {e}")
+        else:
+            st.error("❌ Cannot save: GitHub connection failed.")
 
 st.markdown(f"""<div class="footer"><b>Islam Jewellery</b> • Sarafa Bazar <br>Dollar Rate: Rs {live_data['usd']:.2f}</div>""", unsafe_allow_html=True)
