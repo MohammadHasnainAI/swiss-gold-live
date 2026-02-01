@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import time
 from datetime import datetime
 import pytz
 import pandas as pd
@@ -9,7 +10,7 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # ---------------------------------------------------------
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION (MUST BE FIRST)
 # ---------------------------------------------------------
 st.set_page_config(page_title="Islam Jewellery Pro", page_icon="💎", layout="centered")
 
@@ -23,19 +24,22 @@ defaults = {
     "gold_market_status": "OPEN",
     "silver_market_status": "OPEN",
     "selected_metal": "Gold",
-    "settings_loaded": False
+    "settings_loaded": False,
+    "confirm_reset_history": False,
+    "confirm_reset_chart": False
 }
 
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# Auto-Refresh: Runs every 5s for users (stops in Admin to prevents input resets)
+# AUTO-REFRESH: Runs ONLY for Public Users (Not Admin)
+# This checks for new prices every 5 seconds
 if not st.session_state.admin_auth:
-    st_autorefresh(interval=5000, key="public_refresh") 
+    st_autorefresh(interval=5000, key="public_refresh")
 
 # ---------------------------------------------------------
-# 3. CSS STYLING (Ultra Compact + Professional Gray)
+# 3. CSS STYLING (Ultra Compact + Professional)
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -45,7 +49,7 @@ st.markdown("""
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
 #MainMenu, footer, header {visibility:hidden;}
 
-/* --- SPACE REMOVER --- */
+/* Remove Top Space */
 .block-container {
     padding-top: 0rem !important;
     padding-bottom: 1rem !important;
@@ -58,7 +62,7 @@ st.markdown("""
 .brand-title {font-size:1.8rem; font-weight:800; color:#111; letter-spacing:-0.5px; text-transform:uppercase; line-height: 1; margin-bottom: 2px;}
 .brand-subtitle {font-size:0.65rem; color:#d4af37; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;}
 
-/* Price Cards (Live) */
+/* Price Cards */
 .price-card {
     background:#ffffff; 
     border-radius:16px; 
@@ -149,7 +153,6 @@ def get_live_rates():
     CURR_KEY = st.secrets["CURR_KEY"]
 
     try:
-        # Timeout added to prevent hanging
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals, timeout=5).json()
 
@@ -173,22 +176,29 @@ def get_live_rates():
 # ---------------------------------------------------------
 # 6. INITIALIZE & LOAD SETTINGS
 # ---------------------------------------------------------
+# We do NOT cache live_rates here so the refresh button works instantly
 live_data = get_live_rates()
 
-# Load Settings ONLY ONCE per session to allow Admin editing without reset
-if not st.session_state.settings_loaded and repo:
-    try:
-        content = repo.get_contents("manual.json")
-        settings = json.loads(content.decoded_content.decode())
-        
-        st.session_state.new_gold = settings.get("gold_premium", 0)
-        st.session_state.new_silver = settings.get("silver_premium", 0)
-        st.session_state.gold_market_status = settings.get("gold_market", "OPEN")
-        st.session_state.silver_market_status = settings.get("silver_market", "OPEN")
-        st.session_state.settings_loaded = True
-    except:
-        # If file doesn't exist, just mark loaded
-        st.session_state.settings_loaded = True
+# Load Settings (Cached briefly for admin speed)
+@st.cache_data(ttl=5, show_spinner=False)
+def load_settings_from_github():
+    if repo:
+        try:
+            content = repo.get_contents("manual.json")
+            return json.loads(content.decoded_content.decode())
+        except:
+            pass
+    return {"gold_premium": 0, "silver_premium": 0, "gold_market": "OPEN", "silver_market": "OPEN"}
+
+settings = load_settings_from_github()
+
+# Update Session State only if not already editing
+if not st.session_state.settings_loaded:
+    st.session_state.new_gold = settings.get("gold_premium", 0)
+    st.session_state.new_silver = settings.get("silver_premium", 0)
+    st.session_state.gold_market_status = settings.get("gold_market", "OPEN")
+    st.session_state.silver_market_status = settings.get("silver_market", "OPEN")
+    st.session_state.settings_loaded = True
 
 # ---------------------------------------------------------
 # 7. CALCULATIONS
@@ -230,7 +240,7 @@ else:
 
 # REFRESH BUTTON
 if st.button("🔄 Check for New Prices", use_container_width=True):
-    get_live_rates.clear()
+    load_settings_from_github.clear()
     st.rerun()
 
 # --- SILVER SECTION ---
@@ -372,7 +382,11 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("history.json", "Log Init", json.dumps(history))
 
+                    # 3. Force Cache Clear so User sees update instantly
+                    load_settings_from_github.clear()
+                    
                     st.success("✅ Published! Users will see updates shortly.")
+                    time.sleep(1) # Allow GitHub time to propagate
                     st.rerun()
                 except Exception as e:
                     st.error(f"GitHub Error: {e}")
