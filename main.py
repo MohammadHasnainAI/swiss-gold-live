@@ -54,22 +54,7 @@ st.markdown("""
 .success-msg {background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0;}
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
-
-/* Separate Reset Button Styles */
-.reset-container {
-    background: #fff5f5;
-    border: 2px solid #feb2b2;
-    border-radius: 12px;
-    padding: 1rem;
-    margin: 1rem 0;
-    text-align: center;
-}
-.reset-btn {
-    background: #e53e3e !important;
-    color: white !important;
-    border: none !important;
-    font-weight: 700 !important;
-}
+.reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -142,7 +127,7 @@ gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + setting
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
 gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 
-# 9. MAIN DISPLAY (UNCHANGED)
+# 9. MAIN DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
 st.markdown(f"""
@@ -177,7 +162,7 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 10. ADMIN DASHBOARD WITH SEPARATE RESET BUTTONS
+# 10. ADMIN DASHBOARD
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
         st.markdown("""<div class="login-card"><div style="font-size: 2.5rem; margin-bottom: 1rem;">🔐</div><div class="admin-title">Admin Portal</div><p style="color: #666; margin-bottom: 2rem;">Authorized Personnel Only</p></div>""", unsafe_allow_html=True)
@@ -204,7 +189,6 @@ if st.session_state.admin_auth:
     
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
-    # TAB 1 & 2 (UNCHANGED)
     with tabs[0]:
         st.markdown("### Select Metal")
         btn_cols = st.columns(2)
@@ -309,22 +293,17 @@ if st.session_state.admin_auth:
         with detail_cols[1]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["silver"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {silver_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Premium Applied:</strong> Rs {int(st.session_state.new_silver)}</p></div>', unsafe_allow_html=True)
     
-    # ==========================================
-    # TAB 3: HISTORY WITH SEPARATE RESET BUTTON
-    # ==========================================
+    # TAB 3: HISTORY
     with tabs[2]:
         st.markdown("### 📜 Rate History Log")
         
-        # Header with separate reset section
         header_cols = st.columns([3, 1])
         with header_cols[0]:
             st.caption(f"Showing last 60 records from GitHub")
         with header_cols[1]:
-            # SEPARATE RESET BUTTON FOR HISTORY
-            if st.button("🗑️ Reset History", type="secondary", key="reset_history_btn", help="Clear all history records"):
+            if st.button("🗑️ Reset History", type="secondary", key="reset_history_btn"):
                 st.session_state.confirm_reset_history = True
         
-        # Confirmation dialog for History Reset
         if st.session_state.confirm_reset_history:
             st.markdown('<div class="reset-container">', unsafe_allow_html=True)
             st.markdown("⚠️ **Warning:** This will permanently delete all history records!")
@@ -348,7 +327,6 @@ if st.session_state.admin_auth:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Display history data
         try:
             if repo:
                 contents = repo.get_contents("history.json")
@@ -364,33 +342,26 @@ if st.session_state.admin_auth:
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button("📥 Export to CSV", csv, f"islam_jewellery_history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
                 else:
-                    st.info("📭 No history records found. Publish rates to build history.")
-            else:
-                st.error("❌ GitHub repository not connected")
-        except Exception as e:
-            st.info("📭 History is empty. Click 'Publish Rate' to create records.")
+                    st.info("📭 No history records found.")
+        except:
+            st.info("📭 History is empty.")
     
-    # ==========================================
-    # TAB 4: CHARTS WITH SEPARATE RESET BUTTON  
-    # ==========================================
+    # TAB 4: CHARTS (FIXED LINE AND AREA)
     with tabs[3]:
         st.markdown("### 📈 Price Trends Analysis")
         
-        # Chart controls with separate reset
         control_cols = st.columns([2, 2, 1])
         
         with control_cols[0]:
-            chart_metal = st.selectbox("Select Chart:", ["Gold Trends", "Silver Trends"], key="chart_selector")
+            chart_metal = st.selectbox("Select Metal:", ["Gold", "Silver"], key="chart_selector")
         
         with control_cols[1]:
-            chart_type = st.selectbox("View:", ["Line Chart", "Area Chart"], key="chart_type")
+            chart_type = st.selectbox("Chart Type:", ["Line", "Area"], key="chart_type")
         
         with control_cols[2]:
-            # SEPARATE RESET BUTTON FOR CHARTS
-            if st.button("🗑️ Reset", type="secondary", key="reset_chart_btn", help="Clear all chart data"):
+            if st.button("🗑️ Reset", type="secondary", key="reset_chart_btn"):
                 st.session_state.confirm_reset_chart = True
         
-        # Confirmation dialog for Chart Reset
         if st.session_state.confirm_reset_chart:
             st.markdown('<div class="reset-container">', unsafe_allow_html=True)
             st.markdown("⚠️ **Warning:** This will delete all chart data permanently!")
@@ -414,7 +385,7 @@ if st.session_state.admin_auth:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Chart display
+        # FIXED CHART DISPLAY
         try:
             if repo:
                 contents = repo.get_contents("history.json")
@@ -425,49 +396,86 @@ if st.session_state.admin_auth:
                     df['date'] = pd.to_datetime(df['date'])
                     df['gold_pk'] = pd.to_numeric(df['gold_pk'], errors='coerce')
                     df['silver_pk'] = pd.to_numeric(df['silver_pk'], errors='coerce')
+                    df = df.dropna(subset=['date'])
                     
-                    # Select metal
-                    if "Gold" in chart_metal:
+                    if chart_metal == "Gold":
+                        df = df.dropna(subset=['gold_pk'])
                         y_col = 'gold_pk'
                         color = '#d4af37'
-                        title = "Gold Price History"
+                        title = "Gold Price History (PKR per Tola)"
                     else:
+                        df = df.dropna(subset=['silver_pk'])
                         y_col = 'silver_pk'
-                        color = '#C0C0C0'
-                        title = "Silver Price History"
+                        color = '#71797E'
+                        title = "Silver Price History (PKR per Tola)"
                     
-                    # Chart type
-                    if chart_type == "Area Chart":
-                        chart = alt.Chart(df).mark_area(
-                            color=color,
-                            opacity=0.6,
-                            line={'color': color, 'strokeWidth': 3},
-                            point=True
-                        ).encode(
+                    if chart_type == "Area":
+                        # Layered area + line
+                        base = alt.Chart(df).encode(
                             x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
-                            y=alt.Y(f'{y_col}:Q', title='Rate (PKR)', scale=alt.Scale(zero=False)),
-                            tooltip=[alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'), alt.Tooltip(f'{y_col}:Q', title='Rate', format='Rs ,.0f')]
-                        ).properties(title=title, height=450)
+                            y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
+                            tooltip=[
+                                alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'),
+                                alt.Tooltip(f'{y_col}:Q', title='Rate', format='Rs ,.0f')
+                            ]
+                        )
+                        
+                        area = base.mark_area(color=color, opacity=0.3)
+                        line = base.mark_line(color=color, strokeWidth=3).mark_point(filled=True, color=color, size=50)
+                        
+                        chart = (area + line).properties(
+                            title=title,
+                            height=450
+                        ).configure_view(
+                            strokeWidth=0,
+                            fill='white'
+                        ).configure_axis(
+                            gridColor='#f0f0f0',
+                            labelFontSize=12,
+                            titleFontSize=14
+                        ).configure_title(
+                            fontSize=16,
+                            fontWeight=800,
+                            anchor='middle'
+                        )
                     else:
+                        # Line only
                         chart = alt.Chart(df).mark_line(
-                            point=True,
                             color=color,
                             strokeWidth=3
                         ).encode(
                             x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
-                            y=alt.Y(f'{y_col}:Q', title='Rate (PKR)', scale=alt.Scale(zero=False)),
-                            tooltip=[alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'), alt.Tooltip(f'{y_col}:Q', title='Rate', format='Rs ,.0f')]
-                        ).properties(title=title, height=450)
+                            y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
+                            tooltip=[
+                                alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'),
+                                alt.Tooltip(f'{y_col}:Q', title='Rate', format='Rs ,.0f')
+                            ]
+                        ).properties(
+                            title=title,
+                            height=450
+                        ).configure_view(
+                            strokeWidth=0,
+                            fill='white'
+                        ).configure_axis(
+                            gridColor='#f0f0f0',
+                            labelFontSize=12,
+                            titleFontSize=14
+                        ).configure_title(
+                            fontSize=16,
+                            fontWeight=800,
+                            anchor='middle'
+                        )
                     
                     st.altair_chart(chart, use_container_width=True)
                     
-                    # Stats
-                    stats_cols = st.columns(3)
+                    stats_cols = st.columns(4)
                     stats_cols[0].metric("📈 Highest", f"Rs {df[y_col].max():,.0f}")
                     stats_cols[1].metric("📉 Lowest", f"Rs {df[y_col].min():,.0f}")
                     stats_cols[2].metric("📊 Average", f"Rs {df[y_col].mean():,.0f}")
+                    stats_cols[3].metric("📝 Records", f"{len(df)}")
+                    
                 else:
-                    st.info("📊 Not enough data. Need at least 2 records to generate charts. Please publish rates multiple times.")
+                    st.info("📊 Not enough data. Need at least 2 records.")
         except Exception as e:
             st.error(f"Chart error: {str(e)}")
 
