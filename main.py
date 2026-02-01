@@ -12,9 +12,12 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH (5 SECONDS) - EXCLUDES ADMIN SECTION
+# AUTO-REFRESH EVERY 5 SECONDS (for non-admin users only)
 # ---------------------------------------------------------
-if "admin_auth" not in st.session_state or not st.session_state.admin_auth:
+if "admin_auth" not in st.session_state:
+    st.session_state.admin_auth = False
+    
+if not st.session_state.admin_auth:
     st_autorefresh(interval=5000, key="gold_refresh")
 
 # 2. HELPER FUNCTIONS
@@ -58,6 +61,7 @@ st.markdown("""
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
+.update-indicator {background: #dbeafe; border-left: 4px solid #3b82f6; padding: 0.5rem; border-radius: 4px; margin: 10px 0; font-size: 0.8rem; color: #1e40af; text-align: center;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,8 +74,8 @@ try:
 except Exception as e:
     st.error(f"GitHub Connection Error: {e}")
 
-# 5. SETTINGS ENGINE
-@st.cache_data(ttl=5, show_spinner=False)
+# 5. SETTINGS ENGINE - FIXED: Reduced TTL to 1 second for faster updates
+@st.cache_data(ttl=1, show_spinner=False)  # Changed from 5 to 1 second
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0}
     if repo:
@@ -119,19 +123,19 @@ settings = load_settings()
 if "error" in live_data:
     st.warning(f"⚠️ API Error: {live_data['error']}")
 
-# Initialize Session States safely
+# Initialize Session States
 if "new_gold" not in st.session_state: 
     st.session_state.new_gold = int(settings.get("gold_premium", 0))
 if "new_silver" not in st.session_state: 
     st.session_state.new_silver = int(settings.get("silver_premium", 0))
-if "admin_auth" not in st.session_state: 
-    st.session_state.admin_auth = False
 if "selected_metal" not in st.session_state: 
     st.session_state.selected_metal = "Gold"
 if "confirm_reset_history" not in st.session_state: 
     st.session_state.confirm_reset_history = False
 if "confirm_reset_chart" not in st.session_state: 
     st.session_state.confirm_reset_chart = False
+if "last_update" not in st.session_state:
+    st.session_state.last_update = "Never"
 
 # 8. CALCULATIONS
 try:
@@ -139,13 +143,21 @@ try:
     silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
     gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 except Exception as e:
-    st.error(f"Calculation Error: {e}")
+    st.error(f"Calc Error: {e}")
     gold_tola = 0
     silver_tola = 0
     gold_dubai_tola = 0
 
 # 9. MAIN DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
+
+# Auto-refresh indicator for users
+if not st.session_state.admin_auth:
+    st.markdown(f"""
+    <div class="update-indicator">
+        🔄 Auto-updating every 5 seconds | Last check: {datetime.now().strftime('%H:%M:%S')}
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown(f"""
 <div class="price-card">
@@ -157,7 +169,9 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">Rs {live_data['usd']:.2f}</div><div class="stat-label">Dollar</div></div>
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
     </div>
-    <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">Last Updated: <b>{live_data['time']}</b></div>
+    <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
+        Last Updated: <b>{live_data['time']}</b> | Settings: {settings.get('gold_premium', 0)}
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -202,7 +216,11 @@ if st.session_state.admin_auth:
     with col2:
         if st.button("🔴 Logout", type="secondary", key="logout_btn"):
             st.session_state.admin_auth = False
+            st.session_state.last_update = datetime.now().strftime('%H:%M:%S')
             st.rerun()
+    
+    # Warning: Admin changes affect all users within 5 seconds
+    st.info("ℹ️ Changes will reflect on all user screens within 5 seconds of publishing")
     
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
@@ -320,8 +338,13 @@ if st.session_state.admin_auth:
                     except Exception:
                         repo.create_file("history.json", "Init", json.dumps(history))
                     
-                    st.markdown('<div class="success-msg">✅ Published! Live in 5 seconds.</div>', unsafe_allow_html=True)
-                    manual_refresh()
+                    st.session_state.last_update = datetime.now().strftime('%H:%M:%S')
+                    
+                    # IMPORTANT: Clear cache so next refresh gets new data
+                    load_settings.clear()
+                    
+                    st.markdown('<div class="success-msg">✅ Published! All users will see update within 5 seconds.</div>', unsafe_allow_html=True)
+                    st.balloons()
                     
                 except Exception as e:
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
@@ -391,7 +414,7 @@ if st.session_state.admin_auth:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    # Safe column renaming with defaults for missing columns (backward compatibility)
+                    # Safe column renaming
                     column_mapping = {
                         'date': 'Date/Time',
                         'gold_pk': 'Gold PKR',
@@ -401,16 +424,14 @@ if st.session_state.admin_auth:
                         'usd': 'USD Rate'
                     }
                     
-                    # Only rename columns that exist
                     df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
                     
-                    # Ensure all expected columns exist, fill with 0 if missing
+                    # Ensure all columns exist
                     expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
                     for col in expected_cols:
                         if col not in df.columns:
                             df[col] = 0
                     
-                    # Reorder columns
                     df = df[expected_cols]
                     
                     st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
@@ -424,7 +445,7 @@ if st.session_state.admin_auth:
         except Exception as e:
             st.info(f"📭 History empty or error: {str(e)}")
     
-    # TAB 4: CHARTS (BUG-FREE VERSION)
+    # TAB 4: CHARTS
     with tabs[3]:
         st.markdown("### 📈 Price Trends")
         
@@ -463,7 +484,6 @@ if st.session_state.admin_auth:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Bug-free chart rendering
         try:
             if repo:
                 contents = repo.get_contents("history.json")
@@ -473,7 +493,6 @@ if st.session_state.admin_auth:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date'])
                     
-                    # Safely convert to numeric
                     df['gold_pk'] = pd.to_numeric(df.get('gold_pk', 0), errors='coerce')
                     df['silver_pk'] = pd.to_numeric(df.get('silver_pk', 0), errors='coerce')
                     df = df.dropna(subset=['date'])
@@ -492,7 +511,6 @@ if st.session_state.admin_auth:
                     if len(df_chart) < 2:
                         st.info("📊 Not enough data points for chart.")
                     else:
-                        # Create base chart
                         base = alt.Chart(df_chart).encode(
                             x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
                             y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
@@ -503,16 +521,13 @@ if st.session_state.admin_auth:
                         )
                         
                         if chart_type == "Area":
-                            # Layer area and line
                             chart = (base.mark_area(color=color, opacity=0.3) + 
                                     base.mark_line(color=color, strokeWidth=3) + 
                                     base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
                         else:
-                            # Line only
                             chart = (base.mark_line(color=color, strokeWidth=3) + 
                                     base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
                         
-                        # Configure and display
                         final_chart = chart.properties(
                             title=title,
                             height=450
@@ -531,7 +546,6 @@ if st.session_state.admin_auth:
                         
                         st.altair_chart(final_chart, use_container_width=True)
                         
-                        # Metrics
                         c1, c2, c3, c4 = st.columns(4)
                         c1.metric("📈 High", f"Rs {df_chart[y_col].max():,.0f}")
                         c2.metric("📉 Low", f"Rs {df_chart[y_col].min():,.0f}")
