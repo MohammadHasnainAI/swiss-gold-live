@@ -9,10 +9,17 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V7", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V8", page_icon="💎", layout="centered")
 st_autorefresh(interval=240000, key="gold_refresh")
 
-# 2. DESIGN & CSS
+# 2. HELPER FUNCTIONS (The Fix for Jumping Buttons)
+def update_premium(key, amount):
+    """Updates the premium value in session state instantly."""
+    if key not in st.session_state:
+        st.session_state[key] = 0
+    st.session_state[key] += amount
+
+# 3. DESIGN & CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
@@ -30,7 +37,7 @@ st.markdown("""
 .big-price {font-size:3.5rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-2px;}
 .price-label {font-size:1rem; color:#666; font-weight:400; margin-top:5px;}
 
-/* Stats Container (3 Columns now) */
+/* Stats Container */
 .stats-container {display:flex; gap:8px; margin-top:15px; justify-content:center; flex-wrap: wrap;}
 .stat-box {background:#fafafa; border-radius:10px; padding:10px; text-align:center; border:1px solid #eeeeee; flex: 1; min-width: 80px;}
 .stat-value {font-size:1.0rem; font-weight:700; color:#d4af37;}
@@ -48,10 +55,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. GLOBAL VARIABLES
+# 4. GITHUB & DATA VARIABLES
 repo = None 
-
-# 4. GITHUB CONNECTION
 try:
     if "GIT_TOKEN" in st.secrets:
         g = Github(st.secrets["GIT_TOKEN"])
@@ -73,15 +78,9 @@ def get_live_rates():
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
-        if "code" in metal_res and metal_res["code"] == 400:
-             return f"API ERROR: {metal_res['message']}"
-
         # B. Get Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
-        
-        if "conversion_rates" not in curr_res:
-            return "API ERROR: Currency Limit Reached"
         
         # C. Extract Prices
         gold_price = 0
@@ -92,15 +91,15 @@ def get_live_rates():
         if "XAG/USD" in metal_res and "price" in metal_res["XAG/USD"]:
             silver_price = float(metal_res['XAG/USD']['price'])
             
-        # Fallback values if API returns 0
+        # Fallback values
         if gold_price == 0: gold_price = 2750.00
         if silver_price == 0: silver_price = 32.00 
         
         return {
             "gold": gold_price,
             "silver": silver_price,
-            "usd": curr_res['conversion_rates']['PKR'],
-            "aed": curr_res['conversion_rates']['AED'],
+            "usd": curr_res.get('conversion_rates', {}).get('PKR', 278.0),
+            "aed": curr_res.get('conversion_rates', {}).get('AED', 3.67),
             "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
             "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -122,11 +121,13 @@ if repo:
     except:
         pass
 
+# Initialize Session State (Important for stable inputs)
+if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
+if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
+
 # 7. CALCULATIONS
 gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
-
-# Dubai Tola = (Ounce / 31.1035) * 11.66 * AED Rate
 gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 
 # 8. UI DISPLAY
@@ -142,6 +143,9 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">${live_data['gold']:,.0f}</div><div class="stat-label">Int'l Ounce</div></div>
         <div class="stat-box"><div class="stat-value">Rs {live_data['usd']:.2f}</div><div class="stat-label">Dollar Rate</div></div>
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai Tola</div></div>
+    </div>
+    <div style="font-size:0.75rem; color:#aaa; margin-top:15px; padding-top:10px; border-top:1px solid #eee;">
+        Last Updated: <b>{live_data['time']}</b>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -161,7 +165,7 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 9. ADMIN DASHBOARD (UPDATED)
+# 9. ADMIN DASHBOARD
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -180,27 +184,26 @@ if st.session_state.admin_auth:
 
     # TAB 1: Update Prices
     with tabs[0]:
-        # Initialize
-        if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
-        if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
-
-        # Metal Selector
         metal_choice = st.radio("Select Metal to Update:", ["Gold", "Silver"], horizontal=True)
 
         if metal_choice == "Gold":
             st.subheader("🟡 Update Gold Premium")
             c1, c2, c3 = st.columns([1,1,2])
-            if c1.button("- 500", key="g_sub"): st.session_state.new_gold -= 500
-            if c2.button("+ 500", key="g_add"): st.session_state.new_gold += 500
-            st.session_state.new_gold = c3.number_input("Gold Premium (Rs)", value=st.session_state.new_gold, step=100)
+            # FIX: Use on_click to prevent jumping bugs
+            c1.button("- 500", key="g_sub", on_click=update_premium, args=("new_gold", -500))
+            c2.button("+ 500", key="g_add", on_click=update_premium, args=("new_gold", 500))
+            # FIX: Use key binding for stable input
+            st.number_input("Gold Premium (Rs)", key="new_gold", step=100)
         
         else:
             st.subheader("⚪ Update Silver Premium")
             d1, d2, d3 = st.columns([1,1,2])
-            if d1.button("- 50", key="s_sub"): st.session_state.new_silver -= 50
-            if d2.button("+ 50", key="s_add"): st.session_state.new_silver += 50
-            st.session_state.new_silver = d3.number_input("Silver Premium (Rs)", value=st.session_state.new_silver, step=50)
+            # FIX: Use on_click here too
+            d1.button("- 50", key="s_sub", on_click=update_premium, args=("new_silver", -50))
+            d2.button("+ 50", key="s_add", on_click=update_premium, args=("new_silver", 50))
+            st.number_input("Silver Premium (Rs)", key="new_silver", step=50)
 
+        # Publish Button (Only this updates the main website)
         if st.button("🚀 Publish Rate", type="primary"):
             if repo:
                 try:
@@ -234,6 +237,7 @@ if st.session_state.admin_auth:
                         repo.create_file("history.json", "Init Hist", json.dumps(history))
 
                     st.success("✅ Updated & Logged!")
+                    # This rerun will finally show the new prices on the cards
                     st.rerun()
                 except Exception as e:
                     st.error(f"GitHub Error: {e}")
