@@ -1,85 +1,77 @@
 import streamlit as st
 import requests
 import json
-import time
 from datetime import datetime
 import pytz
-import pandas as pd
-import altair as alt
 from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # -------------------------------
-# 1. PAGE CONFIG & AUTO REFRESH
+# 1. PAGE CONFIG
 # -------------------------------
 st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
 
-# Auto-refresh every 4 minutes (240000ms) to match your API Limit (800/day)
+# Refresh every 4 minutes (240000ms) - DO NOT LOWER THIS
 st_autorefresh(interval=240000, key="gold_refresh")
 
 # -------------------------------
-# 2. CSS STYLING (YOUR EXACT DESIGN)
+# 2. STYLING (Your Design)
 # -------------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
-
 .stApp {background-color:#ffffff; font-family:'Outfit', sans-serif; color:#333;}
 #MainMenu, footer, header {visibility:hidden;}
-
-/* Header */
 .header-box {text-align:center; padding-bottom:20px; border-bottom:1px solid #f0f0f0; margin-bottom:30px;}
 .brand-title {font-size:3rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:5px; text-transform:uppercase;}
 .brand-subtitle {font-size:0.9rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
-
-/* Cards */
 .price-card {background:#ffffff; border-radius:20px; padding:30px 20px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.08); border:1px solid #f5f5f5; margin-bottom:20px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:6px 14px; border-radius:30px; font-weight:700; font-size:0.75rem; letter-spacing:1px; display:inline-block; margin-bottom:15px;}
 .big-price {font-size:3.5rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-2px;}
 .price-label {font-size:1rem; color:#666; font-weight:400; margin-top:5px;}
-
-/* Stats Row */
 .stats-container {display:flex; gap:10px; margin-top:15px; justify-content:center;}
 .stat-box {background:#fafafa; border-radius:10px; padding:10px 15px; text-align:center; border:1px solid #eeeeee; min-width: 100px;}
 .stat-value {font-size:1.1rem; font-weight:700; color:#d4af37;}
 .stat-label {font-size:0.65rem; color:#999; font-weight:600; letter-spacing:1px; text-transform:uppercase;}
-
-/* Buttons */
 .btn-grid {display: flex; gap: 15px; margin-top: 30px; justify-content: center;}
 .contact-btn {flex: 1; padding: 15px; border-radius: 12px; text-align: center; text-decoration: none; font-weight: 600; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); color: white !important;}
 .btn-call {background-color:#111;}
 .btn-whatsapp {background-color:#25D366;}
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
-
-/* Footer */
 .footer {background:#f9f9f9; padding:25px; text-align:center; font-size:0.85rem; color:#555; margin-top:50px; border-top:1px solid #eee;}
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 3. SMART FETCHING ENGINE
+# 3. ROBUST FETCHING (With Error Details)
 # -------------------------------
 @st.cache_data(ttl=240, show_spinner=False)
 def get_live_rates():
     try:
-        # 1. Get Keys
-        try:
-            TD_KEY = st.secrets["TWELVE_DATA_KEY"]
-            CURR_KEY = st.secrets["CURR_KEY"]
-        except:
-            return "MISSING_KEYS"
+        # Check Secrets
+        if "TWELVE_DATA_KEY" not in st.secrets:
+            return "ERROR: Twelve Data Key missing in Secrets."
+        
+        TD_KEY = st.secrets["TWELVE_DATA_KEY"]
+        CURR_KEY = st.secrets["CURR_KEY"]
 
-        # 2. Fetch Gold & Silver (Twelve Data)
+        # 1. Fetch Gold/Silver
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
         
-        # Check for API Errors
-        if 'code' in metal_res and metal_res['code'] == 400:
-            return f"API_ERROR: {metal_res['message']}"
+        # DEBUG: Check if Twelve Data returned an error inside the symbol
+        if "XAU/USD" in metal_res and "code" in metal_res["XAU/USD"]:
+            return f"API ERROR: {metal_res['XAU/USD']['message']}"
+        
+        if "code" in metal_res and metal_res["code"] == 400:
+             return f"API ERROR: {metal_res['message']}"
 
-        # 3. Fetch Currency (ExchangeRate-API)
+        # 2. Fetch Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
+        
+        if "conversion_rates" not in curr_res:
+            return "API ERROR: Currency Key Invalid or Limit Reached"
 
         return {
             "gold": float(metal_res['XAU/USD']['price']),
@@ -89,48 +81,34 @@ def get_live_rates():
             "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p")
         }
     except Exception as e:
-        return f"CRITICAL_ERROR: {str(e)}"
+        return f"SYSTEM ERROR: {str(e)}"
 
 # -------------------------------
-# 4. LOAD DATA
+# 4. LOAD & DISPLAY
 # -------------------------------
 live_data = get_live_rates()
 
-# ERROR HANDLING DISPLAY
+# Show Error if Data Failed
 if isinstance(live_data, str):
-    st.error(f"⚠️ System Error: {live_data}")
-    st.info("Please check your API Keys in Streamlit Secrets.")
-    st.stop()
-elif not live_data:
-    st.error("⚠️ Connection Weak. Retrying...")
+    st.error(f"⚠️ {live_data}")
     st.stop()
 
-# -------------------------------
-# 5. ADMIN SETTINGS (GitHub Load)
-# -------------------------------
+# Load Settings from GitHub
 try:
     g = Github(st.secrets["GIT_TOKEN"])
     repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
-    
-    # Load manual.json
-    try:
-        content = repo.get_contents("manual.json")
-        settings = json.loads(content.decoded_content.decode())
-    except:
-        settings = {"gold_premium": 0, "silver_premium": 0}
+    content = repo.get_contents("manual.json")
+    settings = json.loads(content.decoded_content.decode())
 except:
-    # Safe Mode if GitHub fails
     settings = {"gold_premium": 0, "silver_premium": 0}
 
-# -------------------------------
-# 6. CALCULATIONS
-# -------------------------------
+# Calculations
 gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
 gold_dubai = (live_data['gold'] / 31.1035) * live_data['aed']
 
 # -------------------------------
-# 7. DASHBOARD UI
+# 5. UI COMPONENTS
 # -------------------------------
 st.markdown("""
 <div class="header-box">
@@ -168,9 +146,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# 8. CONTACT BUTTONS
-# -------------------------------
+# BUTTONS
 st.markdown("""
 <div class="btn-grid">
     <a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a>
@@ -178,9 +154,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# 9. ADMIN PANEL
-# -------------------------------
+# ADMIN PANEL
 if "admin_auth" not in st.session_state:
     st.session_state.admin_auth = False
 
@@ -193,8 +167,6 @@ if not st.session_state.admin_auth:
 if st.session_state.admin_auth:
     st.markdown("---")
     st.subheader("⚙️ Update Premiums")
-    
-    # Use Session State to handle inputs
     if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
     if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
 
@@ -204,28 +176,16 @@ if st.session_state.admin_auth:
 
     if st.button("💾 Save to GitHub"):
         try:
-            # Update manual.json
-            new_settings = {
-                "gold_premium": st.session_state.new_gold,
-                "silver_premium": st.session_state.new_silver,
-                "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
+            new_settings = {"gold_premium": st.session_state.new_gold, "silver_premium": st.session_state.new_silver}
             try:
                 contents = repo.get_contents("manual.json")
                 repo.update_file(contents.path, "Update Settings", json.dumps(new_settings), contents.sha)
             except:
                 repo.create_file("manual.json", "Init Settings", json.dumps(new_settings))
-            
             st.success("✅ Saved! Refreshing...")
             time.sleep(2)
             st.rerun()
         except Exception as e:
             st.error(f"GitHub Error: {e}")
 
-# Footer
-st.markdown(f"""
-<div class="footer">
-<b>Islam Jewellery</b> • Sarafa Bazar <br>
-Dollar Rate: Rs {live_data['usd']:.2f}
-</div>
-""", unsafe_allow_html=True)
+st.markdown(f"""<div class="footer"><b>Islam Jewellery</b> • Sarafa Bazar <br>Dollar Rate: Rs {live_data['usd']:.2f}</div>""", unsafe_allow_html=True)
