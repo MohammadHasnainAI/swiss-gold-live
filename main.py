@@ -9,7 +9,7 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V12", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
 # AUTO-REFRESH ENGINE (5 SECONDS)
@@ -26,47 +26,83 @@ def manual_refresh():
     get_live_rates.clear()
     load_settings.clear()
 
-# 3. DESIGN & CSS (ULTRA COMPACT - UNCHANGED)
+# 3. DESIGN & CSS (ULTRA COMPACT + LIGHT GRAY THEME)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
-.stApp {background-color:#ffffff; font-family:'Outfit', sans-serif; color:#333;}
+
+/* Main Background - Light Gray */
+.stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
 #MainMenu, footer, header {visibility:hidden;}
 
-/* --- CRITICAL FIX: AGGRESSIVE SPACE REMOVAL --- */
+/* --- SPACE REMOVER --- */
 .block-container {
-    padding-top: 0rem !important;     /* Zero top padding */
+    padding-top: 0rem !important;     /* Remove top padding */
     padding-bottom: 1rem !important;
-    margin-top: -20px !important;     /* Pull content up */
+    margin-top: -40px !important;     /* Pull everything up */
     max-width: 700px;
 }
 
-/* Header - Ultra Tight */
-.header-box {text-align:center; padding-bottom:5px; border-bottom:1px solid #f0f0f0; margin-bottom:10px; margin-top: 10px;}
-.brand-title {font-size:2.0rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:0px; text-transform:uppercase; line-height: 1;}
-.brand-subtitle {font-size:0.7rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
+/* Header - Tight & Clean */
+.header-box {text-align:center; padding-bottom:5px; margin-bottom:10px; margin-top: 15px;}
+.brand-title {font-size:1.8rem; font-weight:800; color:#111; letter-spacing:-0.5px; text-transform:uppercase; line-height: 1; margin-bottom: 2px;}
+.brand-subtitle {font-size:0.65rem; color:#d4af37; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;}
 
-/* Cards - Compact */
-.price-card {background:#ffffff; border-radius:15px; padding:12px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid #f5f5f5; margin-bottom:10px;}
-.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 8px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:1px; display:inline-block; margin-bottom:2px;}
-.big-price {font-size:2.5rem; font-weight:800; color:#111; line-height:1; margin:2px 0; letter-spacing:-1px;}
-.price-label {font-size:0.8rem; color:#666; font-weight:400; margin-top:0px;}
+/* Cards - White on Gray Background */
+.price-card {
+    background:#ffffff; 
+    border-radius:16px; 
+    padding:15px; 
+    text-align:center; 
+    box-shadow:0 4px 6px rgba(0,0,0,0.04); 
+    border:1px solid #eef0f2; 
+    margin-bottom:8px; /* Less space between cards */
+}
 
-/* Stats Container */
-.stats-container {display:flex; gap:5px; margin-top:8px; justify-content:center; flex-wrap: wrap;}
-.stat-box {background:#fafafa; border-radius:8px; padding:6px; text-align:center; border:1px solid #eeeeee; flex: 1; min-width: 60px;}
-.stat-value {font-size:0.85rem; font-weight:700; color:#d4af37;}
-.stat-label {font-size:0.5rem; color:#999; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;}
+.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
+.big-price {font-size:2.6rem; font-weight:800; color:#222; line-height:1; margin:4px 0; letter-spacing:-1px;}
+.price-label {font-size:0.85rem; color:#666; font-weight:500;}
+
+/* Stats Container - Gray Boxes */
+.stats-container {display:flex; gap:6px; margin-top:10px; justify-content:center;}
+.stat-box {
+    background:#f1f3f5; /* Light Gray Box */
+    border-radius:8px; 
+    padding:8px; 
+    text-align:center; 
+    border:1px solid #ebebeb; 
+    flex: 1; 
+}
+.stat-value {font-size:0.9rem; font-weight:700; color:#d4af37;}
+.stat-label {font-size:0.55rem; color:#888; font-weight:600; text-transform:uppercase;}
 
 /* Buttons */
-.btn-grid {display: flex; gap: 8px; margin-top: 10px; justify-content: center;}
-.contact-btn {flex: 1; padding: 10px; border-radius: 8px; text-align: center; text-decoration: none; font-weight: 600; font-size: 0.85rem; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); color: white !important;}
-.btn-call {background-color:#111;}
+.btn-grid {display: flex; gap: 8px; margin-top: 12px; justify-content: center;}
+.contact-btn {
+    flex: 1; 
+    padding: 12px; 
+    border-radius: 10px; 
+    text-align: center; 
+    text-decoration: none; 
+    font-weight: 600; 
+    font-size: 0.85rem; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+    color: white !important;
+}
+.btn-call {background-color:#222;}
 .btn-whatsapp {background-color:#25D366;}
-.contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
+.contact-btn:hover {opacity:0.9;}
 
 /* Footer */
-.footer {background:#f9f9f9; padding:10px; text-align:center; font-size:0.7rem; color:#666; margin-top:15px; border-top:1px solid #eee; line-height: 1.3;}
+.footer {
+    background:#f1f3f5; /* Gray Footer */
+    padding:10px; 
+    border-radius: 10px;
+    text-align:center; 
+    font-size:0.7rem; 
+    color:#666; 
+    margin-top:15px; 
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -79,7 +115,7 @@ try:
 except Exception as e:
     print(f"GitHub Error: {e}")
 
-# 5. SETTINGS ENGINE (5 SECONDS)
+# 5. SETTINGS ENGINE
 @st.cache_data(ttl=5, show_spinner=False)
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0}
@@ -91,7 +127,7 @@ def load_settings():
             pass
     return default_settings
 
-# 6. DATA ENGINE (2 MINUTES)
+# 6. DATA ENGINE
 @st.cache_data(ttl=120, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
@@ -145,7 +181,7 @@ gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + setting
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
 gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 
-# 9. UI DISPLAY
+# 9. COMPACT UI DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
 # GOLD CARD
@@ -173,7 +209,7 @@ if st.button("🔄 Check for New Gold Rate", use_container_width=True):
 # SILVER CARD
 st.markdown(f"""
 <div class="price-card">
-    <div class="live-badge" style="background-color:#f0f4f8; color:#4a5568;">● SILVER LIVE</div>
+    <div class="live-badge" style="background-color:#eef2f6; color:#555;">● SILVER LIVE</div>
     <div class="big-price">Rs {silver_tola:,.0f}</div>
     <div class="price-label">24K Silver Per Tola</div>
     <div class="stats-container">
@@ -185,7 +221,7 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 10. ADMIN DASHBOARD (FIXED STATS, HISTORY, CHART)
+# 10. ADMIN DASHBOARD
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -200,7 +236,6 @@ if st.session_state.admin_auth:
         st.session_state.admin_auth = False
         st.rerun()
 
-    # RESTORED STATS TAB
     tabs = st.tabs(["Update", "Stats", "History", "Chart"])
 
     # TAB 1: Update
@@ -257,14 +292,14 @@ if st.session_state.admin_auth:
             else:
                 st.error("❌ GitHub Connection Failed")
 
-    # TAB 2: Stats (FIXED & RESTORED)
+    # TAB 2: Stats
     with tabs[1]:
         st.subheader("Current Settings")
         st.metric("Gold Premium", f"Rs {st.session_state.new_gold}")
         st.metric("Silver Premium", f"Rs {st.session_state.new_silver}")
         st.metric("Current USD Rate", f"Rs {live_data['usd']}")
 
-    # TAB 3: History (FIXED CRASH)
+    # TAB 3: History
     with tabs[2]:
         try:
             if repo:
@@ -274,7 +309,7 @@ if st.session_state.admin_auth:
         except:
             st.info("No history found. Click 'Publish Rate' to create history.")
 
-    # TAB 4: Chart (FIXED BLANK)
+    # TAB 4: Chart
     with tabs[3]:
         try:
             if repo and 'history_data' in locals() and len(history_data) > 0:
