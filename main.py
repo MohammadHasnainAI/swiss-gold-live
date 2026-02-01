@@ -3,11 +3,13 @@ import requests
 import json
 from datetime import datetime
 import pytz
+import pandas as pd
+import altair as alt
 from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V11", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V12", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
 # AUTO-REFRESH ENGINE (5 SECONDS)
@@ -24,7 +26,7 @@ def manual_refresh():
     get_live_rates.clear()
     load_settings.clear()
 
-# 3. DESIGN & CSS (ULTRA COMPACT VERSION)
+# 3. DESIGN & CSS (ULTRA COMPACT - UNCHANGED)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
@@ -183,7 +185,7 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 10. ADMIN DASHBOARD
+# 10. ADMIN DASHBOARD (FIXED STATS, HISTORY, CHART)
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -198,7 +200,8 @@ if st.session_state.admin_auth:
         st.session_state.admin_auth = False
         st.rerun()
 
-    tabs = st.tabs(["Update", "History", "Chart"])
+    # RESTORED STATS TAB
+    tabs = st.tabs(["Update", "Stats", "History", "Chart"])
 
     # TAB 1: Update
     with tabs[0]:
@@ -254,27 +257,35 @@ if st.session_state.admin_auth:
             else:
                 st.error("❌ GitHub Connection Failed")
 
-    # TAB 2: History
+    # TAB 2: Stats (FIXED & RESTORED)
     with tabs[1]:
+        st.subheader("Current Settings")
+        st.metric("Gold Premium", f"Rs {st.session_state.new_gold}")
+        st.metric("Silver Premium", f"Rs {st.session_state.new_silver}")
+        st.metric("Current USD Rate", f"Rs {live_data['usd']}")
+
+    # TAB 3: History (FIXED CRASH)
+    with tabs[2]:
         try:
             if repo:
                 contents = repo.get_contents("history.json")
                 history_data = json.loads(contents.decoded_content.decode())
                 st.dataframe(pd.DataFrame(history_data))
         except:
-            st.info("No history yet.")
+            st.info("No history found. Click 'Publish Rate' to create history.")
 
-    # TAB 3: Chart
-    with tabs[2]:
+    # TAB 4: Chart (FIXED BLANK)
+    with tabs[3]:
         try:
-            if repo and 'df' in locals() and not df.empty:
+            if repo and 'history_data' in locals() and len(history_data) > 0:
+                df = pd.DataFrame(history_data)
                 df['date'] = pd.to_datetime(df['date'])
                 chart = alt.Chart(df).mark_line().encode(x='date:T', y='gold_pk:Q')
                 st.altair_chart(chart, use_container_width=True)
             else:
-                st.info("Update price once to see chart.")
+                st.info("Update prices at least once to see the chart.")
         except:
-            st.info("Chart unavailable.")
+            st.info("Chart will appear after first update.")
 
 # 11. FOOTER
 st.markdown("""
