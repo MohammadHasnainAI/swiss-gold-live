@@ -1,7 +1,7 @@
 streamlit
 requests
 PyGithub
-pytz
 pandas
 altair
 streamlit-autorefresh
+pytz
