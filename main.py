@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import time
 from datetime import datetime
 import pytz
 from github import Github
@@ -10,12 +11,10 @@ from streamlit_autorefresh import st_autorefresh
 # 1. PAGE CONFIG
 # -------------------------------
 st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
-
-# Refresh every 4 minutes (240000ms) - DO NOT LOWER THIS
 st_autorefresh(interval=240000, key="gold_refresh")
 
 # -------------------------------
-# 2. STYLING (Your Design)
+# 2. DESIGN (Your Theme)
 # -------------------------------
 st.markdown("""
 <style>
@@ -43,35 +42,36 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# 3. ROBUST FETCHING (With Error Details)
+# 3. ROBUST DATA ENGINE
 # -------------------------------
 @st.cache_data(ttl=240, show_spinner=False)
 def get_live_rates():
-    try:
-        # Check Secrets
-        if "TWELVE_DATA_KEY" not in st.secrets:
-            return "ERROR: Twelve Data Key missing in Secrets."
-        
-        TD_KEY = st.secrets["TWELVE_DATA_KEY"]
-        CURR_KEY = st.secrets["CURR_KEY"]
+    # 1. Check Secrets
+    if "TWELVE_DATA_KEY" not in st.secrets:
+        return "ERROR: Keys missing in Secrets."
+    
+    TD_KEY = st.secrets["TWELVE_DATA_KEY"]
+    CURR_KEY = st.secrets["CURR_KEY"]
 
-        # 1. Fetch Gold/Silver
+    try:
+        # 2. Get Gold/Silver
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
-        
-        # DEBUG: Check if Twelve Data returned an error inside the symbol
-        if "XAU/USD" in metal_res and "code" in metal_res["XAU/USD"]:
-            return f"API ERROR: {metal_res['XAU/USD']['message']}"
-        
+
+        # ERROR CHECK 1: Global API Error
         if "code" in metal_res and metal_res["code"] == 400:
              return f"API ERROR: {metal_res['message']}"
+        
+        # ERROR CHECK 2: Specific Symbol Error (This fixes your 'price' crash)
+        if "XAU/USD" in metal_res and "code" in metal_res["XAU/USD"]:
+            return f"API LIMIT: {metal_res['XAU/USD']['message']}"
 
-        # 2. Fetch Currency
+        # 3. Get Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
         
         if "conversion_rates" not in curr_res:
-            return "API ERROR: Currency Key Invalid or Limit Reached"
+            return "API ERROR: Currency Limit Reached"
 
         return {
             "gold": float(metal_res['XAU/USD']['price']),
@@ -81,19 +81,20 @@ def get_live_rates():
             "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p")
         }
     except Exception as e:
-        return f"SYSTEM ERROR: {str(e)}"
+        return f"NET ERROR: {str(e)}"
 
 # -------------------------------
 # 4. LOAD & DISPLAY
 # -------------------------------
 live_data = get_live_rates()
 
-# Show Error if Data Failed
+# If error, show message but keep app alive
 if isinstance(live_data, str):
-    st.error(f"⚠️ {live_data}")
-    st.stop()
+    st.warning(f"⚠️ {live_data}")
+    # Use Safe Default Data if API fails
+    live_data = {"gold": 2750.0, "silver": 32.5, "usd": 278.0, "aed": 75.0, "time": "Offline Mode"}
 
-# Load Settings from GitHub
+# Load Settings
 try:
     g = Github(st.secrets["GIT_TOKEN"])
     repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
@@ -108,35 +109,24 @@ silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + set
 gold_dubai = (live_data['gold'] / 31.1035) * live_data['aed']
 
 # -------------------------------
-# 5. UI COMPONENTS
+# 5. UI
 # -------------------------------
-st.markdown("""
-<div class="header-box">
-    <div class="brand-title">Islam Jewellery</div>
-    <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
-# GOLD CARD
+# GOLD
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge">● GOLD LIVE</div>
     <div class="big-price">Rs {gold_tola:,.0f}</div>
     <div class="price-label">24K Gold Per Tola</div>
     <div class="stats-container">
-        <div class="stat-box">
-            <div class="stat-value">${live_data['gold']:,.0f}</div>
-            <div class="stat-label">Int'l Ounce</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-value">AED {gold_dubai:,.0f}</div>
-            <div class="stat-label">Dubai Gram</div>
-        </div>
+        <div class="stat-box"><div class="stat-value">${live_data['gold']:,.0f}</div><div class="stat-label">Int'l Ounce</div></div>
+        <div class="stat-box"><div class="stat-value">AED {gold_dubai:,.0f}</div><div class="stat-label">Dubai Gram</div></div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# SILVER CARD
+# SILVER
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge" style="background-color:#f0f4f8; color:#4a5568;">● SILVER LIVE</div>
@@ -147,17 +137,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # BUTTONS
-st.markdown("""
-<div class="btn-grid">
-    <a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a>
-    <a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# ADMIN PANEL
-if "admin_auth" not in st.session_state:
-    st.session_state.admin_auth = False
-
+# ADMIN
+if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
         if st.text_input("Password", type="password") == "123123":
@@ -169,11 +152,9 @@ if st.session_state.admin_auth:
     st.subheader("⚙️ Update Premiums")
     if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
     if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
-
     c1, c2 = st.columns(2)
     st.session_state.new_gold = c1.number_input("Gold Premium", value=st.session_state.new_gold, step=100)
     st.session_state.new_silver = c2.number_input("Silver Premium", value=st.session_state.new_silver, step=50)
-
     if st.button("💾 Save to GitHub"):
         try:
             new_settings = {"gold_premium": st.session_state.new_gold, "silver_premium": st.session_state.new_silver}
@@ -182,10 +163,7 @@ if st.session_state.admin_auth:
                 repo.update_file(contents.path, "Update Settings", json.dumps(new_settings), contents.sha)
             except:
                 repo.create_file("manual.json", "Init Settings", json.dumps(new_settings))
-            st.success("✅ Saved! Refreshing...")
-            time.sleep(2)
-            st.rerun()
-        except Exception as e:
-            st.error(f"GitHub Error: {e}")
+            st.success("✅ Saved!"); time.sleep(2); st.rerun()
+        except Exception as e: st.error(f"GitHub Error: {e}")
 
 st.markdown(f"""<div class="footer"><b>Islam Jewellery</b> • Sarafa Bazar <br>Dollar Rate: Rs {live_data['usd']:.2f}</div>""", unsafe_allow_html=True)
