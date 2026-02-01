@@ -9,18 +9,23 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V10", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V9", page_icon="💎", layout="centered")
 
-# Auto-refresh every 30 seconds
+# ---------------------------------------------------------
+# AUTO-REFRESH ENGINE (The Magic for Auto-Updates)
+# ---------------------------------------------------------
+# This forces the website to reload every 30 seconds to check for Admin updates
 st_autorefresh(interval=30000, key="gold_refresh") 
 
 # 2. HELPER FUNCTIONS
 def update_premium(key, amount):
+    """Updates the premium value in session state instantly."""
     if key not in st.session_state:
         st.session_state[key] = 0
     st.session_state[key] += amount
 
 def manual_refresh():
+    """Clears cache to force a new API call."""
     get_live_rates.clear()
     load_settings.clear()
 
@@ -42,7 +47,7 @@ st.markdown("""
 .big-price {font-size:3.5rem; font-weight:800; color:#111; line-height:1; margin:10px 0; letter-spacing:-2px;}
 .price-label {font-size:1rem; color:#666; font-weight:400; margin-top:5px;}
 
-/* Stats */
+/* Stats Container */
 .stats-container {display:flex; gap:8px; margin-top:15px; justify-content:center; flex-wrap: wrap;}
 .stat-box {background:#fafafa; border-radius:10px; padding:10px; text-align:center; border:1px solid #eeeeee; flex: 1; min-width: 80px;}
 .stat-value {font-size:1.0rem; font-weight:700; color:#d4af37;}
@@ -69,22 +74,26 @@ try:
 except Exception as e:
     print(f"GitHub Error: {e}")
 
-# 5. DATA ENGINE
+# 5. DATA ENGINE (Short Cache for Fast Updates)
+# TTL reduced to 30 seconds so it picks up Admin changes quickly
 @st.cache_data(ttl=30, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
-        return "ERROR"
+        return "ERROR: Secret Keys Missing"
     
     TD_KEY = st.secrets["TWELVE_DATA_KEY"]
     CURR_KEY = st.secrets["CURR_KEY"]
 
     try:
+        # A. Get Metals
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
+        # B. Get Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
         
+        # C. Extract Prices
         gold_price = 0
         silver_price = 0
         
@@ -93,6 +102,7 @@ def get_live_rates():
         if "XAG/USD" in metal_res and "price" in metal_res["XAG/USD"]:
             silver_price = float(metal_res['XAG/USD']['price'])
             
+        # Fallback values
         if gold_price == 0: gold_price = 2750.00
         if silver_price == 0: silver_price = 32.00 
         
@@ -107,7 +117,7 @@ def get_live_rates():
     except Exception as e:
         return f"UNKNOWN ERROR: {str(e)}"
 
-# 6. LOAD SETTINGS
+# 6. SETTINGS ENGINE (Separate Cache for instant Admin updates)
 @st.cache_data(ttl=30, show_spinner=False)
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0}
@@ -119,22 +129,24 @@ def load_settings():
             pass
     return default_settings
 
+# 7. LOAD EVERYTHING
 live_data = get_live_rates()
 settings = load_settings()
 
 if isinstance(live_data, str):
+    st.warning(f"⚠️ {live_data}")
     live_data = {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Offline Mode", "full_date": "2024-01-01"}
 
 # Initialize Inputs
 if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
 if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
 
-# 7. CALCULATIONS
+# 8. CALCULATIONS
 gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
 gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 
-# 8. UI DISPLAY
+# 9. UI DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
 # GOLD CARD
@@ -154,6 +166,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# GOLD REFRESH BUTTON
 if st.button("🔄 Check for New Gold Rate", use_container_width=True):
     manual_refresh()
     st.rerun()
@@ -173,69 +186,49 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 9. PROFESSIONAL SIDEBAR ADMIN
+# 10. ADMIN DASHBOARD
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
-
-with st.sidebar:
-    st.markdown("### 🛡️ Admin Access")
-    if not st.session_state.admin_auth:
-        admin_pass = st.text_input("Enter Key", type="password")
-        if st.button("Login"):
-            if admin_pass == "123123":
-                st.session_state.admin_auth = True
-                st.rerun()
-            else:
-                st.error("Invalid Key")
-    
-    if st.session_state.admin_auth:
-        st.success("Verfied Admin")
-        if st.button("Log Out"):
-            st.session_state.admin_auth = False
+if not st.session_state.admin_auth:
+    with st.expander("🔒 Admin Login"):
+        if st.text_input("Password", type="password") == "123123":
+            st.session_state.admin_auth = True
             st.rerun()
 
-# 10. MAIN ADMIN DASHBOARD (Only visible if logged in)
 if st.session_state.admin_auth:
-    st.divider()
-    st.markdown("## 🎛️ Control Center")
-    
-    # Live Status Bar
-    s1, s2, s3 = st.columns(3)
-    s1.metric("Live Gold (Ounce)", f"${live_data['gold']:,.0f}")
-    s2.metric("Current Premium", f"Rs {settings['gold_premium']}")
-    s3.metric("Current Price", f"Rs {gold_tola:,.0f}")
+    st.markdown("---")
+    st.title("⚙️ Admin Dashboard")
+    if st.button("🔴 Logout"):
+        st.session_state.admin_auth = False
+        st.rerun()
 
-    # Tabs for neat organization
-    tab_update, tab_history = st.tabs(["✏️ Update Prices", "📜 History"])
+    tabs = st.tabs(["Update Prices", "Stats", "History", "Gold Price Chart"])
 
-    with tab_update:
-        st.info("💡 Adjust the premium to match the local market rate.")
+    # TAB 1: Update Prices
+    with tabs[0]:
+        metal_choice = st.radio("Select Metal to Update:", ["Gold", "Silver"], horizontal=True)
+
+        if metal_choice == "Gold":
+            st.subheader("🟡 Update Gold Premium")
+            c1, c2, c3 = st.columns([1,1,2])
+            # FIX: Use on_click to prevent jumping bugs
+            c1.button("- 500", key="g_sub", on_click=update_premium, args=("new_gold", -500))
+            c2.button("+ 500", key="g_add", on_click=update_premium, args=("new_gold", 500))
+            # FIX: Use key binding for stable input
+            st.number_input("Gold Premium (Rs)", key="new_gold", step=100)
         
-        col_gold, col_silver = st.columns(2)
-        
-        with col_gold:
-            st.markdown("#### 🟡 Gold")
-            g_btn1, g_btn2 = st.columns(2)
-            g_btn1.button("➖ 500", key="g_dec", on_click=update_premium, args=("new_gold", -500))
-            g_btn2.button("➕ 500", key="g_inc", on_click=update_premium, args=("new_gold", 500))
-            st.number_input("Premium (Rs)", key="new_gold", step=100)
-            
-        with col_silver:
-            st.markdown("#### ⚪ Silver")
-            s_btn1, s_btn2 = st.columns(2)
-            s_btn1.button("➖ 50", key="s_dec", on_click=update_premium, args=("new_silver", -50))
-            s_btn2.button("➕ 50", key="s_inc", on_click=update_premium, args=("new_silver", 50))
-            st.number_input("Premium (Rs)", key="new_silver", step=50)
+        else:
+            st.subheader("⚪ Update Silver Premium")
+            d1, d2, d3 = st.columns([1,1,2])
+            # FIX: Use on_click here too
+            d1.button("- 50", key="s_sub", on_click=update_premium, args=("new_silver", -50))
+            d2.button("+ 50", key="s_add", on_click=update_premium, args=("new_silver", 50))
+            st.number_input("Silver Premium (Rs)", key="new_silver", step=50)
 
-        st.markdown("---")
-        
-        # PREVIEW CALCULATION
-        preview_price = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_gold
-        st.caption(f"🚀 **Preview New Price:** Rs {preview_price:,.0f}")
-
-        if st.button("✅ Publish New Rates", type="primary", use_container_width=True):
+        # Publish Button
+        if st.button("🚀 Publish Rate", type="primary"):
             if repo:
                 try:
-                    # Save Settings
+                    # 1. Update Settings
                     new_settings = {"gold_premium": st.session_state.new_gold, "silver_premium": st.session_state.new_silver}
                     try:
                         contents = repo.get_contents("manual.json")
@@ -243,7 +236,7 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
-                    # Save History
+                    # 2. Update History
                     try:
                         h_content = repo.get_contents("history.json")
                         history = json.loads(h_content.decoded_content.decode())
@@ -252,37 +245,67 @@ if st.session_state.admin_auth:
                     
                     history.append({
                         "date": live_data['full_date'],
-                        "gold": preview_price,
+                        "gold_pk": gold_tola,
+                        "silver_pk": silver_tola,
+                        "usd": live_data['usd'],
                         "premium": st.session_state.new_gold
                     })
                     if len(history) > 60: history = history[-60:]
 
                     try:
-                        repo.update_file(h_content.path, "Hist Update", json.dumps(history), h_content.sha)
+                        repo.update_file(h_content.path, "Update Hist", json.dumps(history), h_content.sha)
                     except:
                         repo.create_file("history.json", "Init Hist", json.dumps(history))
 
-                    st.toast("✅ Rates Updated Successfully!")
-                    manual_refresh()
+                    st.success("✅ Updated! Users will see this in ~30 seconds.")
+                    manual_refresh() 
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"GitHub Error: {e}")
             else:
-                st.error("GitHub Connection Failed")
+                st.error("❌ GitHub Connection Failed")
 
-    with tab_history:
+    # TAB 2: Stats
+    with tabs[1]:
+        st.subheader("Current Stats")
+        st.metric("Gold Premium", f"Rs {st.session_state.new_gold}")
+        st.metric("Silver Premium", f"Rs {st.session_state.new_silver}")
+        st.metric("USD Rate", f"Rs {live_data['usd']}")
+
+    # TAB 3: History
+    with tabs[2]:
+        st.subheader("Price History")
         try:
             if repo:
                 contents = repo.get_contents("history.json")
-                df = pd.DataFrame(json.loads(contents.decoded_content.decode()))
-                st.dataframe(df, use_container_width=True)
+                history_data = json.loads(contents.decoded_content.decode())
+                df = pd.DataFrame(history_data)
+                st.dataframe(df)
         except:
-            st.info("No history available yet.")
+            st.info("No history yet.")
+
+    # TAB 4: Chart
+    with tabs[3]:
+        st.subheader("Gold Price Trend")
+        try:
+            if repo and 'df' in locals() and not df.empty:
+                df['date'] = pd.to_datetime(df['date'])
+                chart = alt.Chart(df).mark_line(point=True).encode(
+                    x='date:T',
+                    y='gold_pk:Q',
+                    tooltip=['date', 'gold_pk', 'premium']
+                ).properties(height=300)
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.info("Update price at least once to see the chart.")
+        except:
+            st.info("Chart data unavailable.")
 
 # 11. FOOTER
 st.markdown("""
 <div class="footer">
-**Islam Jewellery** • Sarafa Bazar <br>
-⚠️ Prices are indicative and subject to market changes. Verify before booking.
+**Islam Jewellery** website shows approximate gold prices.<br>
+Prices are updated based on market data and admin-set premium.<br><br>
+⚠️ **Disclaimer:** Prices are indicative and may change anytime. Always verify with the shop before buying. Contact shop directly for confirmed gold rates.
 </div>
 """, unsafe_allow_html=True)
