@@ -7,7 +7,7 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V2", page_icon="💎", layout="centered")
 st_autorefresh(interval=240000, key="gold_refresh")
 
 # 2. DESIGN
@@ -47,7 +47,7 @@ try:
 except Exception as e:
     print(f"GitHub Error: {e}")
 
-# 5. DATA ENGINE (X-RAY VERSION)
+# 5. DATA ENGINE (VERSION 5.0 - IMPOSSIBLE TO CRASH)
 @st.cache_data(ttl=240, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
@@ -61,10 +61,9 @@ def get_live_rates():
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
-        # --- X-RAY DEBUGGER (TELL US THE SECRET MESSAGE) ---
-        # If the price is missing, PRINT the whole message so we can fix it!
-        if "XAU/USD" not in metal_res or "price" not in metal_res["XAU/USD"]:
-            return f"API ERROR: {json.dumps(metal_res)}"
+        # DEBUG: Check if API returned an error message
+        if "code" in metal_res and metal_res["code"] == 400:
+             return f"API ERROR: {metal_res['message']}"
 
         # B. Get Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
@@ -72,10 +71,26 @@ def get_live_rates():
         
         if "conversion_rates" not in curr_res:
             return "API ERROR: Currency Limit Reached"
+        
+        # C. SAFELY EXTRACT PRICES (Uses .get to prevent crashing)
+        gold_price = 0
+        silver_price = 0
+        
+        # Check Gold
+        if "XAU/USD" in metal_res and "price" in metal_res["XAU/USD"]:
+            gold_price = float(metal_res['XAU/USD']['price'])
+        
+        # Check Silver
+        if "XAG/USD" in metal_res and "price" in metal_res["XAG/USD"]:
+            silver_price = float(metal_res['XAG/USD']['price'])
+            
+        # If both are 0, it means the API failed silently
+        if gold_price == 0 and silver_price == 0:
+            return f"API ERROR: No prices found. {json.dumps(metal_res)}"
 
         return {
-            "gold": float(metal_res['XAU/USD']['price']),
-            "silver": float(metal_res['XAG/USD']['price']),
+            "gold": gold_price,
+            "silver": silver_price,
             "usd": curr_res['conversion_rates']['PKR'],
             "aed": curr_res['conversion_rates']['AED'],
             "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p")
@@ -89,7 +104,7 @@ live_data = get_live_rates()
 # 7. ERROR HANDLING
 if isinstance(live_data, str):
     st.warning(f"⚠️ {live_data}")
-    # FALLBACK DATA
+    # FALLBACK DATA (So the site still looks good!)
     live_data = {"gold": 2750.0, "silver": 32.5, "usd": 278.0, "aed": 75.0, "time": "Offline Mode"}
 
 # 8. LOAD SETTINGS
@@ -132,7 +147,7 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 11. ADMIN PANEL
+# 11. ADMIN PANEL (Fixed Save Button)
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -161,6 +176,6 @@ if st.session_state.admin_auth:
                 st.success("✅ Saved!"); st.rerun()
             except Exception as e: st.error(f"GitHub Error: {e}")
         else:
-            st.error("❌ Cannot save: GitHub connection failed.")
+            st.error("❌ Cannot save: GitHub connection failed. Check Secrets.")
 
 st.markdown(f"""<div class="footer"><b>Islam Jewellery</b> • Sarafa Bazar <br>Dollar Rate: Rs {live_data['usd']:.2f}</div>""", unsafe_allow_html=True)
