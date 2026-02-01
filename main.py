@@ -7,7 +7,7 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V12", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V11", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
 # AUTO-REFRESH ENGINE (5 SECONDS)
@@ -24,55 +24,47 @@ def manual_refresh():
     get_live_rates.clear()
     load_settings.clear()
 
-# 3. DESIGN & CSS (SUPER COMPACT VERSION)
+# 3. DESIGN & CSS (ULTRA COMPACT VERSION)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#ffffff; font-family:'Outfit', sans-serif; color:#333;}
+#MainMenu, footer, header {visibility:hidden;}
 
-/* --- CRITICAL FIX: DELETE TOP SPACE COMPLETELY --- */
-/* 1. Remove the Streamlit Header Bar entirely */
-header[data-testid="stHeader"] {
-    display: none !important;
-}
-
-/* 2. Push content to the very top */
+/* --- CRITICAL FIX: AGGRESSIVE SPACE REMOVAL --- */
 .block-container {
-    padding-top: 0rem !important; /* Was 1rem, now 0 */
-    padding-bottom: 2rem !important;
+    padding-top: 0rem !important;     /* Zero top padding */
+    padding-bottom: 1rem !important;
+    margin-top: -20px !important;     /* Pull content up */
     max-width: 700px;
 }
 
-/* Header */
-.header-box {text-align:center; padding-top: 15px; padding-bottom:10px; border-bottom:1px solid #f0f0f0; margin-bottom:15px;}
-.brand-title {font-size:2.2rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:0px; text-transform:uppercase; line-height: 1.1;}
-.brand-subtitle {font-size:0.75rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
+/* Header - Ultra Tight */
+.header-box {text-align:center; padding-bottom:5px; border-bottom:1px solid #f0f0f0; margin-bottom:10px; margin-top: 10px;}
+.brand-title {font-size:2.0rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:0px; text-transform:uppercase; line-height: 1;}
+.brand-subtitle {font-size:0.7rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
 
-/* Cards */
-.price-card {background:#ffffff; border-radius:15px; padding:15px 15px; text-align:center; box-shadow:0 5px 20px rgba(0,0,0,0.06); border:1px solid #f5f5f5; margin-bottom:12px;}
-.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:4px 10px; border-radius:30px; font-weight:700; font-size:0.65rem; letter-spacing:1px; display:inline-block; margin-bottom:5px;}
-.big-price {font-size:2.8rem; font-weight:800; color:#111; line-height:1; margin:5px 0; letter-spacing:-1px;}
-.price-label {font-size:0.9rem; color:#666; font-weight:400; margin-top:2px;}
+/* Cards - Compact */
+.price-card {background:#ffffff; border-radius:15px; padding:12px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid #f5f5f5; margin-bottom:10px;}
+.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 8px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:1px; display:inline-block; margin-bottom:2px;}
+.big-price {font-size:2.5rem; font-weight:800; color:#111; line-height:1; margin:2px 0; letter-spacing:-1px;}
+.price-label {font-size:0.8rem; color:#666; font-weight:400; margin-top:0px;}
 
 /* Stats Container */
-.stats-container {display:flex; gap:5px; margin-top:10px; justify-content:center; flex-wrap: wrap;}
-.stat-box {background:#fafafa; border-radius:8px; padding:8px; text-align:center; border:1px solid #eeeeee; flex: 1; min-width: 70px;}
-.stat-value {font-size:0.9rem; font-weight:700; color:#d4af37;}
-.stat-label {font-size:0.55rem; color:#999; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;}
+.stats-container {display:flex; gap:5px; margin-top:8px; justify-content:center; flex-wrap: wrap;}
+.stat-box {background:#fafafa; border-radius:8px; padding:6px; text-align:center; border:1px solid #eeeeee; flex: 1; min-width: 60px;}
+.stat-value {font-size:0.85rem; font-weight:700; color:#d4af37;}
+.stat-label {font-size:0.5rem; color:#999; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;}
 
 /* Buttons */
-.btn-grid {display: flex; gap: 10px; margin-top: 15px; justify-content: center;}
-.contact-btn {flex: 1; padding: 12px; border-radius: 10px; text-align: center; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); color: white !important;}
+.btn-grid {display: flex; gap: 8px; margin-top: 10px; justify-content: center;}
+.contact-btn {flex: 1; padding: 10px; border-radius: 8px; text-align: center; text-decoration: none; font-weight: 600; font-size: 0.85rem; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); color: white !important;}
 .btn-call {background-color:#111;}
 .btn-whatsapp {background-color:#25D366;}
 .contact-btn:hover {transform:translateY(-2px); opacity:0.9;}
 
 /* Footer */
-.footer {background:#f9f9f9; padding:15px; text-align:center; font-size:0.75rem; color:#666; margin-top:20px; border-top:1px solid #eee; line-height: 1.4;}
-
-/* Hide default footer/menu */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
+.footer {background:#f9f9f9; padding:10px; text-align:center; font-size:0.7rem; color:#666; margin-top:15px; border-top:1px solid #eee; line-height: 1.3;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -151,7 +143,7 @@ gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + setting
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
 gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 
-# 9. COMPACT UI DISPLAY
+# 9. UI DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
 # GOLD CARD
@@ -165,7 +157,7 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">Rs {live_data['usd']:.2f}</div><div class="stat-label">Dollar</div></div>
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
     </div>
-    <div style="font-size:0.65rem; color:#aaa; margin-top:8px; padding-top:8px; border-top:1px solid #eee;">
+    <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
         Last Updated: <b>{live_data['time']}</b>
     </div>
 </div>
