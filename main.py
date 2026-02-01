@@ -1,31 +1,114 @@
-# 10. PROFESSIONAL ADMIN DASHBOARD (FIXED COLORS & TOGGLE)
-# Initialize auth state
-if "admin_auth" not in st.session_state:
-    st.session_state.admin_auth = False
-if "selected_metal" not in st.session_state:
-    st.session_state.selected_metal = "Gold"
-if "new_gold" not in st.session_state:
-    st.session_state.new_gold = settings.get("gold_premium", 0)
-if "new_silver" not in st.session_state:
-    st.session_state.new_silver = settings.get("silver_premium", 0)
+import streamlit as st
+import requests
+import json
+from datetime import datetime
+import pytz
+import pandas as pd
+import altair as alt
+from github import Github
+from streamlit_autorefresh import st_autorefresh
 
-# Professional Gold Theme CSS
+# 1. PAGE CONFIG
+st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
+
+# ---------------------------------------------------------
+# AUTO-REFRESH ENGINE (5 SECONDS)
+# ---------------------------------------------------------
+st_autorefresh(interval=5000, key="gold_refresh") 
+
+# 2. HELPER FUNCTIONS
+def update_premium(key, amount):
+    if key not in st.session_state:
+        st.session_state[key] = 0
+    st.session_state[key] += amount
+
+def manual_refresh():
+    get_live_rates.clear()
+    load_settings.clear()
+
+# 3. DESIGN & CSS (ULTRA COMPACT + LIGHT GRAY THEME + ADMIN DASHBOARD STYLES)
 st.markdown("""
 <style>
-/* Admin Gold Theme */
-.admin-box {
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border-radius: 20px;
-    padding: 2rem;
-    margin: 1rem 0;
-    border: 2px solid #d4af37;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+
+/* Main Background - Light Gray */
+.stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
+#MainMenu, footer, header {visibility:hidden;}
+
+/* --- SPACE REMOVER --- */
+.block-container {
+    padding-top: 0rem !important;
+    padding-bottom: 1rem !important;
+    margin-top: -40px !important;
+    max-width: 700px;
 }
 
+/* Header - Tight & Clean */
+.header-box {text-align:center; padding-bottom:5px; margin-bottom:10px; margin-top: 15px;}
+.brand-title {font-size:1.8rem; font-weight:800; color:#111; letter-spacing:-0.5px; text-transform:uppercase; line-height: 1; margin-bottom: 2px;}
+.brand-subtitle {font-size:0.65rem; color:#d4af37; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;}
+
+/* Cards - White on Gray Background */
+.price-card {
+    background:#ffffff; 
+    border-radius:16px; 
+    padding:15px; 
+    text-align:center; 
+    box-shadow:0 4px 6px rgba(0,0,0,0.04); 
+    border:1px solid #eef0f2; 
+    margin-bottom:8px;
+}
+
+.live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
+.big-price {font-size:2.6rem; font-weight:800; color:#222; line-height:1; margin:4px 0; letter-spacing:-1px;}
+.price-label {font-size:0.85rem; color:#666; font-weight:500;}
+
+/* Stats Container - Gray Boxes */
+.stats-container {display:flex; gap:6px; margin-top:10px; justify-content:center;}
+.stat-box {
+    background:#f1f3f5;
+    border-radius:8px; 
+    padding:8px; 
+    text-align:center; 
+    border:1px solid #ebebeb; 
+    flex: 1; 
+}
+.stat-value {font-size:0.9rem; font-weight:700; color:#d4af37;}
+.stat-label {font-size:0.55rem; color:#888; font-weight:600; text-transform:uppercase;}
+
+/* Buttons */
+.btn-grid {display: flex; gap: 8px; margin-top: 12px; justify-content: center;}
+.contact-btn {
+    flex: 1; 
+    padding: 12px; 
+    border-radius: 10px; 
+    text-align: center; 
+    text-decoration: none; 
+    font-weight: 600; 
+    font-size: 0.85rem; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+    color: white !important;
+}
+.btn-call {background-color:#222;}
+.btn-whatsapp {background-color:#25D366;}
+.contact-btn:hover {opacity:0.9;}
+
+/* Footer */
+.footer {
+    background:#f1f3f5;
+    padding:10px; 
+    border-radius: 10px;
+    text-align:center; 
+    font-size:0.7rem; 
+    color:#666; 
+    margin-top:15px; 
+}
+
+/* Admin Dashboard Gold Theme */
 .login-card {
     background: white;
     border-radius: 16px;
-    padding: 3rem;
+    padding: 2rem;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     max-width: 400px;
     margin: 2rem auto;
@@ -72,45 +155,12 @@ st.markdown("""
     font-weight: 600;
 }
 
-/* Metal Selection Buttons */
-.metal-btn-gold {
-    background: #d4af37 !important;
-    color: white !important;
-    border: none !important;
-    font-weight: 700 !important;
-}
-
-.metal-btn-silver {
-    background: #C0C0C0 !important;
-    color: #1a1a1a !important;
-    border: none !important;
-    font-weight: 700 !important;
-}
-
-.metal-btn-inactive {
-    background: #f0f0f0 !important;
-    color: #666 !important;
-    border: 1px solid #ddd !important;
-}
-
-/* Control Section */
 .control-box {
     background: #fafafa;
     border-radius: 16px;
     padding: 2rem;
     border: 1px solid #e0e0e0;
     margin-top: 1rem;
-}
-
-.premium-display {
-    background: #1a1a1a;
-    color: #d4af37;
-    padding: 1rem;
-    border-radius: 12px;
-    text-align: center;
-    font-size: 2rem;
-    font-weight: 800;
-    margin: 1rem 0;
 }
 
 .success-msg {
@@ -133,6 +183,129 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# 4. GITHUB CONNECTION
+repo = None 
+try:
+    if "GIT_TOKEN" in st.secrets:
+        g = Github(st.secrets["GIT_TOKEN"])
+        repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+except Exception as e:
+    print(f"GitHub Error: {e}")
+
+# 5. SETTINGS ENGINE
+@st.cache_data(ttl=5, show_spinner=False)
+def load_settings():
+    default_settings = {"gold_premium": 0, "silver_premium": 0}
+    if repo:
+        try:
+            content = repo.get_contents("manual.json")
+            return json.loads(content.decoded_content.decode())
+        except:
+            pass
+    return default_settings
+
+# 6. DATA ENGINE
+@st.cache_data(ttl=120, show_spinner=False)
+def get_live_rates():
+    if "TWELVE_DATA_KEY" not in st.secrets:
+        return "ERROR: Secret Keys Missing"
+    
+    TD_KEY = st.secrets["TWELVE_DATA_KEY"]
+    CURR_KEY = st.secrets["CURR_KEY"]
+
+    try:
+        url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
+        metal_res = requests.get(url_metals).json()
+
+        url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
+        curr_res = requests.get(url_curr).json()
+        
+        gold_price = 0
+        silver_price = 0
+        
+        if "XAU/USD" in metal_res and "price" in metal_res["XAU/USD"]:
+            gold_price = float(metal_res['XAU/USD']['price'])
+        if "XAG/USD" in metal_res and "price" in metal_res["XAG/USD"]:
+            silver_price = float(metal_res['XAG/USD']['price'])
+            
+        if gold_price == 0: gold_price = 2750.00
+        if silver_price == 0: silver_price = 32.00 
+        
+        return {
+            "gold": gold_price,
+            "silver": silver_price,
+            "usd": curr_res.get('conversion_rates', {}).get('PKR', 278.0),
+            "aed": curr_res.get('conversion_rates', {}).get('AED', 3.67),
+            "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
+            "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
+        }
+    except Exception as e:
+        return f"UNKNOWN ERROR: {str(e)}"
+
+# 7. LOAD DATA
+live_data = get_live_rates()
+settings = load_settings()
+
+if isinstance(live_data, str):
+    st.warning(f"⚠️ {live_data}")
+    live_data = {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Offline Mode", "full_date": "2024-01-01"}
+
+# Initialize session states
+if "new_gold" not in st.session_state: 
+    st.session_state.new_gold = settings.get("gold_premium", 0)
+if "new_silver" not in st.session_state: 
+    st.session_state.new_silver = settings.get("silver_premium", 0)
+if "admin_auth" not in st.session_state:
+    st.session_state.admin_auth = False
+if "selected_metal" not in st.session_state:
+    st.session_state.selected_metal = "Gold"
+
+# 8. CALCULATIONS
+gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
+silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
+gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
+
+# 9. COMPACT UI DISPLAY
+st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
+
+# GOLD CARD
+st.markdown(f"""
+<div class="price-card">
+    <div class="live-badge">● GOLD LIVE</div>
+    <div class="big-price">Rs {gold_tola:,.0f}</div>
+    <div class="price-label">24K Gold Per Tola</div>
+    <div class="stats-container">
+        <div class="stat-box"><div class="stat-value">${live_data['gold']:,.0f}</div><div class="stat-label">Ounce</div></div>
+        <div class="stat-box"><div class="stat-value">Rs {live_data['usd']:.2f}</div><div class="stat-label">Dollar</div></div>
+        <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
+    </div>
+    <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
+        Last Updated: <b>{live_data['time']}</b>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# REFRESH BUTTON
+if st.button("🔄 Check for New Gold Rate", use_container_width=True):
+    manual_refresh()
+    st.rerun()
+
+# SILVER CARD
+st.markdown(f"""
+<div class="price-card">
+    <div class="live-badge" style="background-color:#eef2f6; color:#555;">● SILVER LIVE</div>
+    <div class="big-price">Rs {silver_tola:,.0f}</div>
+    <div class="price-label">24K Silver Per Tola</div>
+    <div class="stats-container">
+        <div class="stat-box"><div class="stat-value">${live_data['silver']:,.2f}</div><div class="stat-label">Ounce</div></div>
+        <div class="stat-box"><div class="stat-value">{live_data['time']}</div><div class="stat-label">Updated</div></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
+
+# 10. PROFESSIONAL ADMIN DASHBOARD (FIXED)
 # Login Screen
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -170,59 +343,46 @@ if st.session_state.admin_auth:
     
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
-    # TAB 1: Update Rates (FIXED TOGGLE)
+    # TAB 1: Update Rates
     with tabs[0]:
         st.markdown("### Select Metal")
         
-        # Metal Selection Buttons (FIXED LOGIC)
+        # Metal Selection
         btn_cols = st.columns(2)
-        
         with btn_cols[0]:
-            is_gold_active = st.session_state.selected_metal == "Gold"
             if st.button("🟡 GOLD", use_container_width=True, 
-                        type="primary" if is_gold_active else "secondary",
-                        key="btn_gold_select"):
+                        type="primary" if st.session_state.selected_metal == "Gold" else "secondary"):
                 st.session_state.selected_metal = "Gold"
                 st.rerun()
         
         with btn_cols[1]:
-            is_silver_active = st.session_state.selected_metal == "Silver"
             if st.button("⚪ SILVER", use_container_width=True,
-                        type="primary" if is_silver_active else "secondary", 
-                        key="btn_silver_select"):
+                        type="primary" if st.session_state.selected_metal == "Silver" else "secondary"):
                 st.session_state.selected_metal = "Silver"
                 st.rerun()
         
-        # DYNAMIC CONTENT BASED ON SELECTION (THIS WAS MISSING)
-        current_metal = st.session_state.selected_metal
-        
-        if current_metal == "Gold":
+        # Show selected metal controls
+        if st.session_state.selected_metal == "Gold":
             st.markdown('<div class="control-box">', unsafe_allow_html=True)
             st.markdown("### 🟡 Gold Premium Control")
             
             step = 500
-            current_premium = int(st.session_state.new_gold)
+            current = int(st.session_state.new_gold)
             
-            # Quick Adjust Buttons
             adj_cols = st.columns([1, 1, 2])
             with adj_cols[0]:
                 if st.button("➖ 500", use_container_width=True):
-                    st.session_state.new_gold = max(0, current_premium - 500)
+                    st.session_state.new_gold = max(0, current - 500)
                     st.rerun()
             with adj_cols[1]:
                 if st.button("➕ 500", use_container_width=True):
-                    st.session_state.new_gold = current_premium + 500
+                    st.session_state.new_gold = current + 500
                     st.rerun()
             
-            # Manual Input
-            new_val = st.number_input("Gold Premium Amount", 
-                                    value=current_premium, 
-                                    step=step, 
-                                    key="gold_premium_input")
-            st.session_state.new_gold = new_val
+            val = st.number_input("Gold Premium", value=current, step=step)
+            st.session_state.new_gold = val
             
-            # Calculations Preview
-            calculated_gold = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_gold
+            calculated = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_gold
             
             st.markdown(f"""
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
@@ -230,67 +390,59 @@ if st.session_state.admin_auth:
                     <div class="metric-label-pro">Premium</div>
                     <div class="metric-value-pro" style="color: #d4af37;">Rs {int(st.session_state.new_gold):,}</div>
                 </div>
-                <div class="metric-card-pro" style="border-bottom-color: #1a1a1a;">
-                    <div class="metric-label-pro">Final Gold Rate</div>
-                    <div class="metric-value-pro">Rs {calculated_gold:,.0f}</div>
+                <div class="metric-card-pro">
+                    <div class="metric-label-pro">Final Rate</div>
+                    <div class="metric-value-pro">Rs {calculated:,.0f}</div>
                 </div>
-                <div class="metric-card-pro" style="border-bottom-color: #666;">
-                    <div class="metric-label-pro">USD Rate</div>
+                <div class="metric-card-pro">
+                    <div class="metric-label-pro">USD</div>
                     <div class="metric-value-pro" style="font-size: 1.4rem;">Rs {live_data['usd']:.2f}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
             st.markdown('</div>', unsafe_allow_html=True)
             
-        else:  # Silver Selected
+        else:  # Silver
             st.markdown('<div class="control-box">', unsafe_allow_html=True)
             st.markdown("### ⚪ Silver Premium Control")
             
             step = 50
-            current_premium = int(st.session_state.new_silver)
+            current = int(st.session_state.new_silver)
             
-            # Quick Adjust Buttons
             adj_cols = st.columns([1, 1, 2])
             with adj_cols[0]:
-                if st.button("➖ 50", use_container_width=True, key="sil_sub"):
-                    st.session_state.new_silver = max(0, current_premium - 50)
+                if st.button("➖ 50", use_container_width=True, key="s1"):
+                    st.session_state.new_silver = max(0, current - 50)
                     st.rerun()
             with adj_cols[1]:
-                if st.button("➕ 50", use_container_width=True, key="sil_add"):
-                    st.session_state.new_silver = current_premium + 50
+                if st.button("➕ 50", use_container_width=True, key="s2"):
+                    st.session_state.new_silver = current + 50
                     st.rerun()
             
-            # Manual Input
-            new_val = st.number_input("Silver Premium Amount", 
-                                    value=current_premium, 
-                                    step=step,
-                                    key="silver_premium_input")
-            st.session_state.new_silver = new_val
+            val = st.number_input("Silver Premium", value=current, step=step, key="sil_in")
+            st.session_state.new_silver = val
             
-            # Calculations Preview for Silver
-            calculated_silver = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_silver
+            calculated = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_silver
             
             st.markdown(f"""
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
-                <div class="metric-card-pro">
+                <div class="metric-card-pro" style="border-bottom-color: #C0C0C0;">
                     <div class="metric-label-pro">Premium</div>
-                    <div class="metric-value-pro" style="color: #C0C0C0;">Rs {int(st.session_state.new_silver):,}</div>
+                    <div class="metric-value-pro" style="color: #666;">Rs {int(st.session_state.new_silver):,}</div>
                 </div>
                 <div class="metric-card-pro" style="border-bottom-color: #C0C0C0;">
-                    <div class="metric-label-pro">Final Silver Rate</div>
-                    <div class="metric-value-pro">Rs {calculated_silver:,.0f}</div>
+                    <div class="metric-label-pro">Final Rate</div>
+                    <div class="metric-value-pro">Rs {calculated:,.0f}</div>
                 </div>
-                <div class="metric-card-pro" style="border-bottom-color: #666;">
-                    <div class="metric-label-pro">USD Rate</div>
+                <div class="metric-card-pro">
+                    <div class="metric-label-pro">USD</div>
                     <div class="metric-value-pro" style="font-size: 1.4rem;">Rs {live_data['usd']:.2f}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Publish Button (Works for both)
+        # Publish Button
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
             if repo:
@@ -300,7 +452,6 @@ if st.session_state.admin_auth:
                         "silver_premium": int(st.session_state.new_silver)
                     }
                     
-                    # Update manual.json
                     try:
                         contents = repo.get_contents("manual.json")
                         repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", 
@@ -308,7 +459,6 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
-                    # Update History
                     try:
                         h_content = repo.get_contents("history.json")
                         history = json.loads(h_content.decoded_content.decode())
@@ -330,7 +480,7 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("history.json", "Init", json.dumps(history))
                     
-                    st.markdown('<div class="success-msg">✅ Published successfully! Live in 5 seconds.</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="success-msg">✅ Published! Live in 5 seconds.</div>', unsafe_allow_html=True)
                     manual_refresh()
                     
                 except Exception as e:
@@ -338,7 +488,7 @@ if st.session_state.admin_auth:
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
     
-    # TAB 2: Statistics (PROFESSIONAL COMPANY COLORS - GOLD/BLACK)
+    # TAB 2: Statistics (GOLD/BLACK THEME)
     with tabs[1]:
         st.markdown("### Market Overview")
         
@@ -350,17 +500,15 @@ if st.session_state.admin_auth:
                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">🟡</div>
                 <div style="font-size: 0.8rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;">Gold Premium</div>
                 <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">Rs {int(st.session_state.new_gold):,}</div>
-                <div style="font-size: 0.7rem; opacity: 0.6;">Added to spot</div>
             </div>
             """, unsafe_allow_html=True)
             
         with stats_cols[1]:
             st.markdown(f"""
-            <div style="background: white; color: #1a1a1a; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;">
+            <div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;">
                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚪</div>
                 <div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px;">Silver Premium</div>
                 <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0; color: #666;">Rs {int(st.session_state.new_silver):,}</div>
-                <div style="font-size: 0.7rem; color: #999;">Added to spot</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -370,11 +518,9 @@ if st.session_state.admin_auth:
                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">💵</div>
                 <div style="font-size: 0.8rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;">USD/PKR</div>
                 <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">Rs {live_data['usd']:.2f}</div>
-                <div style="font-size: 0.7rem; opacity: 0.7;">Live forex</div>
             </div>
             """, unsafe_allow_html=True)
         
-        # Details Section
         st.markdown("<br>", unsafe_allow_html=True)
         detail_cols = st.columns(2)
         
@@ -382,21 +528,19 @@ if st.session_state.admin_auth:
             st.markdown("""
             <div style="background: #fafafa; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #d4af37;">
                 <h4 style="margin-top: 0; color: #1a1a1a;">🟡 Gold Details</h4>
-                <p style="margin: 0.5rem 0; color: #555;"><strong>Int'l Price:</strong> ${:,.2f}/oz</p>
-                <p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {:,.0f}</p>
+                <p style="margin: 0.5rem 0; color: #555;"><strong>Int'l:</strong> ${:,.2f}/oz</p>
+                <p style="margin: 0.5rem 0; color: #555;"><strong>Tola:</strong> Rs {:,.0f}</p>
                 <p style="margin: 0.5rem 0; color: #555;"><strong>Dubai:</strong> AED {:,.0f}</p>
-                <p style="margin: 0.5rem 0; color: #555;"><strong>Updated:</strong> {}</p>
             </div>
-            """.format(live_data['gold'], gold_tola, gold_dubai_tola, live_data['time']), unsafe_allow_html=True)
+            """.format(live_data['gold'], gold_tola, gold_dubai_tola), unsafe_allow_html=True)
             
         with detail_cols[1]:
             st.markdown("""
             <div style="background: #fafafa; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0;">
                 <h4 style="margin-top: 0; color: #1a1a1a;">⚪ Silver Details</h4>
-                <p style="margin: 0.5rem 0; color: #555;"><strong>Int'l Price:</strong> ${:,.2f}/oz</p>
-                <p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {:,.0f}</p>
+                <p style="margin: 0.5rem 0; color: #555;"><strong>Int'l:</strong> ${:,.2f}/oz</p>
+                <p style="margin: 0.5rem 0; color: #555;"><strong>Tola:</strong> Rs {:,.0f}</p>
                 <p style="margin: 0.5rem 0; color: #555;"><strong>Premium:</strong> Rs {:,}</p>
-                <p style="margin: 0.5rem 0; color: #555;"><strong>Status:</strong> 🟢 Live</p>
             </div>
             """.format(live_data['silver'], silver_tola, int(st.session_state.new_silver)), unsafe_allow_html=True)
     
@@ -415,7 +559,7 @@ if st.session_state.admin_auth:
                         'date': 'Date/Time',
                         'gold_pk': 'Gold (PKR)',
                         'silver_pk': 'Silver (PKR)',
-                        'usd': 'USD Rate'
+                        'usd': 'USD'
                     })
                     
                     st.dataframe(df.sort_values('Date/Time', ascending=False), 
@@ -428,7 +572,7 @@ if st.session_state.admin_auth:
                 else:
                     st.info("No records found.")
         except:
-            st.info("No history available. Publish rates to create history.")
+            st.info("No history available.")
     
     # TAB 4: Charts
     with tabs[3]:
@@ -443,31 +587,25 @@ if st.session_state.admin_auth:
                     df['date'] = pd.to_datetime(df['date'])
                     df = df.sort_values('date')
                     
-                    chart = alt.Chart(df).mark_line(
-                        point=True,
-                        color='#d4af37',
-                        strokeWidth=3
-                    ).encode(
+                    chart = alt.Chart(df).mark_line(point=True, color='#d4af37', strokeWidth=3).encode(
                         x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b')),
                         y=alt.Y('gold_pk:Q', title='Rate (PKR)', scale=alt.Scale(zero=False)),
-                        tooltip=[
-                            alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'),
-                            alt.Tooltip('gold_pk:Q', title='Gold', format='Rs ,.0f')
-                        ]
-                    ).properties(height=400).configure_view(strokeWidth=0)
+                        tooltip=[alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'),
+                                alt.Tooltip('gold_pk:Q', title='Gold', format='Rs ,.0f')]
+                    ).properties(height=400)
                     
                     st.altair_chart(chart, use_container_width=True)
                     
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("High", f"Rs {df['gold_pk'].max():,.0f}")
-                    col2.metric("Low", f"Rs {df['gold_pk'].min():,.0f}")
-                    col3.metric("Avg", f"Rs {df['gold_pk'].mean():,.0f}")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("High", f"Rs {df['gold_pk'].max():,.0f}")
+                    c2.metric("Low", f"Rs {df['gold_pk'].min():,.0f}")
+                    c3.metric("Avg", f"Rs {df['gold_pk'].mean():,.0f}")
                 else:
                     st.info("Need 2+ records for chart.")
         except:
             st.info("Chart available after first update.")
 
-# 11. FOOTER (Keep your original exactly)
+# 11. FOOTER
 st.markdown("""
 <div class="footer">
 <strong>Islam Jewellery</strong> website shows approximate gold prices.<br>
