@@ -7,7 +7,7 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V11", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V12", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
 # AUTO-REFRESH ENGINE (5 SECONDS)
@@ -24,26 +24,31 @@ def manual_refresh():
     get_live_rates.clear()
     load_settings.clear()
 
-# 3. DESIGN & CSS (COMPACT VERSION)
+# 3. DESIGN & CSS (SUPER COMPACT VERSION)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#ffffff; font-family:'Outfit', sans-serif; color:#333;}
-#MainMenu, footer, header {visibility:hidden;}
 
-/* --- CRITICAL FIX: REMOVE TOP WHITESPACE --- */
+/* --- CRITICAL FIX: DELETE TOP SPACE COMPLETELY --- */
+/* 1. Remove the Streamlit Header Bar entirely */
+header[data-testid="stHeader"] {
+    display: none !important;
+}
+
+/* 2. Push content to the very top */
 .block-container {
-    padding-top: 1rem !important;
+    padding-top: 0rem !important; /* Was 1rem, now 0 */
     padding-bottom: 2rem !important;
     max-width: 700px;
 }
 
-/* Header - More Compact */
-.header-box {text-align:center; padding-bottom:10px; border-bottom:1px solid #f0f0f0; margin-bottom:15px;}
+/* Header */
+.header-box {text-align:center; padding-top: 15px; padding-bottom:10px; border-bottom:1px solid #f0f0f0; margin-bottom:15px;}
 .brand-title {font-size:2.2rem; font-weight:800; color:#111; letter-spacing:-1px; margin-bottom:0px; text-transform:uppercase; line-height: 1.1;}
 .brand-subtitle {font-size:0.75rem; color:#d4af37; font-weight:600; letter-spacing:2px; text-transform:uppercase;}
 
-/* Cards - Less Padding */
+/* Cards */
 .price-card {background:#ffffff; border-radius:15px; padding:15px 15px; text-align:center; box-shadow:0 5px 20px rgba(0,0,0,0.06); border:1px solid #f5f5f5; margin-bottom:12px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:4px 10px; border-radius:30px; font-weight:700; font-size:0.65rem; letter-spacing:1px; display:inline-block; margin-bottom:5px;}
 .big-price {font-size:2.8rem; font-weight:800; color:#111; line-height:1; margin:5px 0; letter-spacing:-1px;}
@@ -64,6 +69,10 @@ st.markdown("""
 
 /* Footer */
 .footer {background:#f9f9f9; padding:15px; text-align:center; font-size:0.75rem; color:#666; margin-top:20px; border-top:1px solid #eee; line-height: 1.4;}
+
+/* Hide default footer/menu */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
