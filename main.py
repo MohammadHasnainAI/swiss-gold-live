@@ -37,17 +37,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. GLOBAL VARIABLES
-repo = None  # Fixes 'repo not defined' error
+repo = None 
 
-# 4. GITHUB CONNECTION (Try to connect immediately)
+# 4. GITHUB CONNECTION
 try:
     if "GIT_TOKEN" in st.secrets:
         g = Github(st.secrets["GIT_TOKEN"])
         repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
 except Exception as e:
-    st.error(f"GitHub Connection Failed: {e}")
+    print(f"GitHub Error: {e}")
 
-# 5. DATA ENGINE
+# 5. DATA ENGINE (X-RAY VERSION)
 @st.cache_data(ttl=240, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
@@ -57,14 +57,13 @@ def get_live_rates():
     CURR_KEY = st.secrets["CURR_KEY"]
 
     try:
-        # A. Get Gold
+        # A. Get Gold & Silver
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
-        # DEBUG: If 'price' is missing, return the WHOLE message so we can see it
-        if "XAU/USD" not in metal_res:
-            return f"API ERROR: {json.dumps(metal_res)}"
-        if "price" not in metal_res["XAU/USD"]:
+        # --- X-RAY DEBUGGER (TELL US THE SECRET MESSAGE) ---
+        # If the price is missing, PRINT the whole message so we can fix it!
+        if "XAU/USD" not in metal_res or "price" not in metal_res["XAU/USD"]:
             return f"API ERROR: {json.dumps(metal_res)}"
 
         # B. Get Currency
@@ -72,7 +71,7 @@ def get_live_rates():
         curr_res = requests.get(url_curr).json()
         
         if "conversion_rates" not in curr_res:
-            return f"CURRENCY ERROR: {json.dumps(curr_res)}"
+            return "API ERROR: Currency Limit Reached"
 
         return {
             "gold": float(metal_res['XAU/USD']['price']),
@@ -87,10 +86,10 @@ def get_live_rates():
 # 6. LOAD DATA
 live_data = get_live_rates()
 
-# 7. ERROR HANDLING (Prevents Crash)
+# 7. ERROR HANDLING
 if isinstance(live_data, str):
     st.warning(f"⚠️ {live_data}")
-    # Use Manual Fallback Data
+    # FALLBACK DATA
     live_data = {"gold": 2750.0, "silver": 32.5, "usd": 278.0, "aed": 75.0, "time": "Offline Mode"}
 
 # 8. LOAD SETTINGS
@@ -100,7 +99,7 @@ if repo:
         content = repo.get_contents("manual.json")
         settings = json.loads(content.decoded_content.decode())
     except:
-        pass # Use default if file missing
+        pass
 
 # 9. CALCULATIONS
 gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
@@ -133,7 +132,7 @@ st.markdown(f"""
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 11. ADMIN PANEL (Fixed)
+# 11. ADMIN PANEL
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
