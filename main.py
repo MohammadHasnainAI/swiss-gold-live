@@ -10,7 +10,12 @@ from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
-st_autorefresh(interval=5000, key="gold_refresh") 
+
+# ---------------------------------------------------------
+# AUTO-REFRESH (5 SECONDS) - EXCLUDES ADMIN SECTION
+# ---------------------------------------------------------
+if "admin_auth" not in st.session_state or not st.session_state.admin_auth:
+    st_autorefresh(interval=5000, key="gold_refresh")
 
 # 2. HELPER FUNCTIONS
 def update_premium(key, amount):
@@ -45,8 +50,6 @@ st.markdown("""
 .btn-call {background-color:#222;}
 .btn-whatsapp {background-color:#25D366;}
 .footer {background:#f1f3f5; padding:10px; border-radius: 10px; text-align:center; font-size:0.7rem; color:#666; margin-top:15px;}
-
-/* Admin Styles */
 .login-card {background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 2rem auto; text-align: center; border-top: 4px solid #d4af37;}
 .admin-title {font-size: 1.8rem; font-weight: 800; color: #d4af37; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 2px;}
 .metric-card-pro {background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-bottom: 3px solid #d4af37; text-align: center;}
@@ -64,8 +67,8 @@ try:
     if "GIT_TOKEN" in st.secrets:
         g = Github(st.secrets["GIT_TOKEN"])
         repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
-except:
-    pass
+except Exception as e:
+    st.error(f"GitHub Connection Error: {e}")
 
 # 5. SETTINGS ENGINE
 @st.cache_data(ttl=5, show_spinner=False)
@@ -75,23 +78,25 @@ def load_settings():
         try:
             content = repo.get_contents("manual.json")
             return json.loads(content.decoded_content.decode())
-        except:
-            pass
+        except Exception:
+            return default_settings
     return default_settings
 
 # 6. DATA ENGINE
 @st.cache_data(ttl=120, show_spinner=False)
 def get_live_rates():
-    if "TWELVE_DATA_KEY" not in st.secrets:
-        return "ERROR: Secret Keys Missing"
+    if "TWELVE_DATA_KEY" not in st.secrets or "CURR_KEY" not in st.secrets:
+        return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "No API Keys", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     
     try:
         TD_KEY = st.secrets["TWELVE_DATA_KEY"]
         CURR_KEY = st.secrets["CURR_KEY"]
+        
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
-        metal_res = requests.get(url_metals).json()
+        metal_res = requests.get(url_metals, timeout=10).json()
+        
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
-        curr_res = requests.get(url_curr).json()
+        curr_res = requests.get(url_curr, timeout=10).json()
         
         gold_price = float(metal_res.get('XAU/USD', {}).get('price', 2750.00))
         silver_price = float(metal_res.get('XAG/USD', {}).get('price', 32.00))
@@ -104,28 +109,40 @@ def get_live_rates():
             "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
             "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
         }
-    except:
-        return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Error", "full_date": "2024-01-01"}
+    except Exception as e:
+        return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Error", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
 
 # 7. LOAD DATA
 live_data = get_live_rates()
 settings = load_settings()
 
-if isinstance(live_data, str):
-    live_data = {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Offline", "full_date": "2024-01-01"}
+if "error" in live_data:
+    st.warning(f"⚠️ API Error: {live_data['error']}")
 
-# Initialize Session States
-if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
-if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
-if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
-if "selected_metal" not in st.session_state: st.session_state.selected_metal = "Gold"
-if "confirm_reset_history" not in st.session_state: st.session_state.confirm_reset_history = False
-if "confirm_reset_chart" not in st.session_state: st.session_state.confirm_reset_chart = False
+# Initialize Session States safely
+if "new_gold" not in st.session_state: 
+    st.session_state.new_gold = int(settings.get("gold_premium", 0))
+if "new_silver" not in st.session_state: 
+    st.session_state.new_silver = int(settings.get("silver_premium", 0))
+if "admin_auth" not in st.session_state: 
+    st.session_state.admin_auth = False
+if "selected_metal" not in st.session_state: 
+    st.session_state.selected_metal = "Gold"
+if "confirm_reset_history" not in st.session_state: 
+    st.session_state.confirm_reset_history = False
+if "confirm_reset_chart" not in st.session_state: 
+    st.session_state.confirm_reset_chart = False
 
 # 8. CALCULATIONS
-gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
-silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
-gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
+try:
+    gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
+    silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
+    gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
+except Exception as e:
+    st.error(f"Calculation Error: {e}")
+    gold_tola = 0
+    silver_tola = 0
+    gold_dubai_tola = 0
 
 # 9. MAIN DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
@@ -168,7 +185,7 @@ if not st.session_state.admin_auth:
         st.markdown("""<div class="login-card"><div style="font-size: 2.5rem; margin-bottom: 1rem;">🔐</div><div class="admin-title">Admin Portal</div><p style="color: #666; margin-bottom: 2rem;">Authorized Personnel Only</p></div>""", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            password = st.text_input("Password", type="password", placeholder="Enter password...")
+            password = st.text_input("Password", type="password", placeholder="Enter password...", key="admin_pass")
             if st.button("🔓 Login", use_container_width=True, type="primary"):
                 if password == "123123":
                     st.session_state.admin_auth = True
@@ -183,12 +200,13 @@ if st.session_state.admin_auth:
         st.markdown('<div class="admin-title" style="margin-bottom: 0;">⚙️ Admin Dashboard</div>', unsafe_allow_html=True)
         st.markdown('<p style="color: #666; margin-top: 0;">Manage premium rates & analytics</p>', unsafe_allow_html=True)
     with col2:
-        if st.button("🔴 Logout", type="secondary"):
+        if st.button("🔴 Logout", type="secondary", key="logout_btn"):
             st.session_state.admin_auth = False
             st.rerun()
     
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
+    # TAB 1: Update Rates
     with tabs[0]:
         st.markdown("### Select Metal")
         btn_cols = st.columns(2)
@@ -206,57 +224,84 @@ if st.session_state.admin_auth:
             st.markdown("### 🟡 Gold Premium Control")
             step = 500
             current = int(st.session_state.new_gold)
+            
             adj_cols = st.columns([1, 1, 2])
             with adj_cols[0]:
-                if st.button("➖ 500", use_container_width=True):
+                if st.button("➖ 500", use_container_width=True, key="g_minus"):
                     st.session_state.new_gold = max(0, current - 500)
                     st.rerun()
             with adj_cols[1]:
-                if st.button("➕ 500", use_container_width=True):
+                if st.button("➕ 500", use_container_width=True, key="g_plus"):
                     st.session_state.new_gold = current + 500
                     st.rerun()
-            val = st.number_input("Gold Premium", value=current, step=step)
-            st.session_state.new_gold = val
+            
+            val = st.number_input("Gold Premium", value=current, step=step, key="gold_input")
+            st.session_state.new_gold = int(val)
+            
             calculated = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_gold
-            st.markdown(f"""<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;"><div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #d4af37;">Rs {int(st.session_state.new_gold):,}</div></div><div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Final Rate</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {calculated:,.0f}</div></div><div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">USD</div><div style="font-size: 1.4rem; font-weight: 800;">Rs {live_data['usd']:.2f}</div></div></div>""", unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
+                <div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #d4af37;">Rs {int(st.session_state.new_gold):,}</div></div>
+                <div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Final Rate</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {calculated:,.0f}</div></div>
+                <div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">USD</div><div style="font-size: 1.4rem; font-weight: 800;">Rs {live_data['usd']:.2f}</div></div>
+            </div>
+            """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
+            
         else:
             st.markdown('<div class="control-box">', unsafe_allow_html=True)
             st.markdown("### ⚪ Silver Premium Control")
             step = 50
             current = int(st.session_state.new_silver)
+            
             adj_cols = st.columns([1, 1, 2])
             with adj_cols[0]:
-                if st.button("➖ 50", use_container_width=True, key="s1"):
+                if st.button("➖ 50", use_container_width=True, key="s_minus"):
                     st.session_state.new_silver = max(0, current - 50)
                     st.rerun()
             with adj_cols[1]:
-                if st.button("➕ 50", use_container_width=True, key="s2"):
+                if st.button("➕ 50", use_container_width=True, key="s_plus"):
                     st.session_state.new_silver = current + 50
                     st.rerun()
-            val = st.number_input("Silver Premium", value=current, step=step, key="sil_in")
-            st.session_state.new_silver = val
+            
+            val = st.number_input("Silver Premium", value=current, step=step, key="silver_input")
+            st.session_state.new_silver = int(val)
+            
             calculated = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_silver
-            st.markdown(f"""<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;"><div class="metric-card-pro" style="border-bottom-color: #C0C0C0;"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div><div class="metric-card-pro" style="border-bottom-color: #C0C0C0;"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Final Rate</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {calculated:,.0f}</div></div><div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">USD</div><div style="font-size: 1.4rem; font-weight: 800;">Rs {live_data['usd']:.2f}</div></div></div>""", unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
+                <div class="metric-card-pro" style="border-bottom-color: #C0C0C0;"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div>
+                <div class="metric-card-pro" style="border-bottom-color: #C0C0C0;"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Final Rate</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {calculated:,.0f}</div></div>
+                <div class="metric-card-pro"><div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">USD</div><div style="font-size: 1.4rem; font-weight: 800;">Rs {live_data['usd']:.2f}</div></div>
+            </div>
+            """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
             if repo:
                 try:
-                    new_settings = {"gold_premium": int(st.session_state.new_gold), "silver_premium": int(st.session_state.new_silver)}
+                    new_settings = {
+                        "gold_premium": int(st.session_state.new_gold), 
+                        "silver_premium": int(st.session_state.new_silver)
+                    }
+                    
+                    # Update manual.json
                     try:
                         contents = repo.get_contents("manual.json")
-                        repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", json.dumps(new_settings), contents.sha)
-                    except:
+                        repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", 
+                                       json.dumps(new_settings), contents.sha)
+                    except Exception:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
+                    # Update History
                     try:
                         h_content = repo.get_contents("history.json")
                         history = json.loads(h_content.decoded_content.decode())
-                    except:
+                    except Exception:
                         history = []
                     
-                    # UPDATED: Added gold_ounce and silver_ounce to history
                     history.append({
                         "date": live_data['full_date'],
                         "gold_pk": float(gold_tola),
@@ -265,23 +310,29 @@ if st.session_state.admin_auth:
                         "silver_ounce": float(live_data['silver']),
                         "usd": float(live_data['usd'])
                     })
-                    if len(history) > 60: history = history[-60:]
+                    
+                    if len(history) > 60: 
+                        history = history[-60:]
                     
                     try:
-                        repo.update_file(h_content.path, f"Hist - {datetime.now().strftime('%H:%M')}", json.dumps(history), h_content.sha)
-                    except:
+                        repo.update_file(h_content.path, f"Hist - {datetime.now().strftime('%H:%M')}", 
+                                       json.dumps(history), h_content.sha)
+                    except Exception:
                         repo.create_file("history.json", "Init", json.dumps(history))
                     
                     st.markdown('<div class="success-msg">✅ Published! Live in 5 seconds.</div>', unsafe_allow_html=True)
                     manual_refresh()
+                    
                 except Exception as e:
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
     
+    # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
         stats_cols = st.columns(3)
+        
         with stats_cols[0]:
             st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(st.session_state.new_gold):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[1]:
@@ -291,22 +342,21 @@ if st.session_state.admin_auth:
         
         st.markdown("<br>", unsafe_allow_html=True)
         detail_cols = st.columns(2)
+        
         with detail_cols[0]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #d4af37; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">🟡 Gold Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["gold"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {gold_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Dubai Rate:</strong> AED {gold_dubai_tola:,.0f}</p></div>', unsafe_allow_html=True)
         with detail_cols[1]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["silver"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {silver_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Premium Applied:</strong> Rs {int(st.session_state.new_silver)}</p></div>', unsafe_allow_html=True)
     
-    # ==========================================
-    # TAB 3: HISTORY (WITH OUNCE COLUMN)
-    # ==========================================
+    # TAB 3: HISTORY (WITH OUNCE COLUMNS)
     with tabs[2]:
         st.markdown("### 📜 Rate History Log")
         
         header_cols = st.columns([3, 1])
         with header_cols[0]:
-            st.caption(f"Showing last 60 records from GitHub")
+            st.caption(f"Last 60 records")
         with header_cols[1]:
-            if st.button("🗑️ Reset History", type="secondary", key="reset_history_btn"):
+            if st.button("🗑️ Reset History", type="secondary", key="reset_hist_btn"):
                 st.session_state.confirm_reset_history = True
         
         if st.session_state.confirm_reset_history:
@@ -318,16 +368,16 @@ if st.session_state.admin_auth:
                     if repo:
                         try:
                             h_content = repo.get_contents("history.json")
-                            repo.update_file(h_content.path, "Reset history data", json.dumps([]), h_content.sha)
+                            repo.update_file(h_content.path, "Reset history", json.dumps([]), h_content.sha)
                             st.session_state.confirm_reset_history = False
-                            st.success("✅ History cleared successfully!")
+                            st.success("✅ History cleared!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
                     else:
                         st.error("GitHub not connected")
             with conf_cols[1]:
-                if st.button("❌ Cancel", key="cancel_hist_reset", use_container_width=True):
+                if st.button("❌ Cancel", key="cancel_hist", use_container_width=True):
                     st.session_state.confirm_reset_history = False
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
@@ -341,71 +391,79 @@ if st.session_state.admin_auth:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    # UPDATED: Added Gold Ounce and Silver Ounce columns
-                    df = df.rename(columns={
+                    # Safe column renaming with defaults for missing columns (backward compatibility)
+                    column_mapping = {
                         'date': 'Date/Time',
                         'gold_pk': 'Gold PKR',
                         'silver_pk': 'Silver PKR',
                         'gold_ounce': 'Gold Oz ($)',
                         'silver_ounce': 'Silver Oz ($)',
                         'usd': 'USD Rate'
-                    })
+                    }
                     
-                    # Reorder columns to put Ounce next to respective metal
-                    column_order = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
-                    df = df[column_order]
+                    # Only rename columns that exist
+                    df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+                    
+                    # Ensure all expected columns exist, fill with 0 if missing
+                    expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
+                    for col in expected_cols:
+                        if col not in df.columns:
+                            df[col] = 0
+                    
+                    # Reorder columns
+                    df = df[expected_cols]
                     
                     st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
                     
                     csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Export to CSV", csv, f"islam_jewellery_history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+                    st.download_button("📥 Export CSV", csv, f"history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
                 else:
                     st.info("📭 No history records found.")
-        except:
-            st.info("📭 History is empty.")
+            else:
+                st.error("❌ GitHub not connected")
+        except Exception as e:
+            st.info(f"📭 History empty or error: {str(e)}")
     
-    # ==========================================
-    # TAB 4: CHARTS (FIXED LINE AND AREA)
-    # ==========================================
+    # TAB 4: CHARTS (BUG-FREE VERSION)
     with tabs[3]:
-        st.markdown("### 📈 Price Trends Analysis")
+        st.markdown("### 📈 Price Trends")
         
-        control_cols = st.columns([2, 2, 1])
+        ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 1])
         
-        with control_cols[0]:
-            chart_metal = st.selectbox("Select Metal:", ["Gold", "Silver"], key="chart_selector")
+        with ctrl_col1:
+            chart_metal = st.selectbox("Select Metal:", ["Gold", "Silver"], key="chart_sel")
         
-        with control_cols[1]:
-            chart_type = st.selectbox("Chart Type:", ["Line", "Area"], key="chart_type")
+        with ctrl_col2:
+            chart_type = st.selectbox("Chart Type:", ["Line", "Area"], key="type_sel")
         
-        with control_cols[2]:
-            if st.button("🗑️ Reset", type="secondary", key="reset_chart_btn"):
+        with ctrl_col3:
+            if st.button("🗑️ Reset", type="secondary", key="reset_chart"):
                 st.session_state.confirm_reset_chart = True
         
         if st.session_state.confirm_reset_chart:
             st.markdown('<div class="reset-container">', unsafe_allow_html=True)
-            st.markdown("⚠️ **Warning:** This will delete all chart data permanently!")
-            conf_cols = st.columns(2)
-            with conf_cols[0]:
-                if st.button("✅ Delete Data", type="primary", key="confirm_chart_yes", use_container_width=True):
+            st.markdown("⚠️ **Warning:** Delete all chart data?")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("✅ Delete", type="primary", key="confirm_chart_yes", use_container_width=True):
                     if repo:
                         try:
                             h_content = repo.get_contents("history.json")
-                            repo.update_file(h_content.path, "Reset chart data", json.dumps([]), h_content.sha)
+                            repo.update_file(h_content.path, "Reset", json.dumps([]), h_content.sha)
                             st.session_state.confirm_reset_chart = False
-                            st.success("✅ Chart data cleared!")
+                            st.success("✅ Cleared!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
                     else:
-                        st.error("GitHub not connected")
-            with conf_cols[1]:
-                if st.button("❌ Cancel", key="cancel_chart_reset", use_container_width=True):
+                        st.error("Not connected")
+            with c2:
+                if st.button("❌ Cancel", key="cancel_chart", use_container_width=True):
                     st.session_state.confirm_reset_chart = False
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # FIXED CHART DISPLAY
+        # Bug-free chart rendering
         try:
             if repo:
                 contents = repo.get_contents("history.json")
@@ -414,64 +472,48 @@ if st.session_state.admin_auth:
                 if history_data and len(history_data) > 1:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date'])
-                    df['gold_pk'] = pd.to_numeric(df['gold_pk'], errors='coerce')
-                    df['silver_pk'] = pd.to_numeric(df['silver_pk'], errors='coerce')
+                    
+                    # Safely convert to numeric
+                    df['gold_pk'] = pd.to_numeric(df.get('gold_pk', 0), errors='coerce')
+                    df['silver_pk'] = pd.to_numeric(df.get('silver_pk', 0), errors='coerce')
                     df = df.dropna(subset=['date'])
                     
                     if chart_metal == "Gold":
-                        df = df.dropna(subset=['gold_pk'])
+                        df_chart = df.dropna(subset=['gold_pk'])
                         y_col = 'gold_pk'
                         color = '#d4af37'
-                        title = "Gold Price History (PKR per Tola)"
+                        title = "Gold Price History"
                     else:
-                        df = df.dropna(subset=['silver_pk'])
+                        df_chart = df.dropna(subset=['silver_pk'])
                         y_col = 'silver_pk'
                         color = '#71797E'
-                        title = "Silver Price History (PKR per Tola)"
+                        title = "Silver Price History"
                     
-                    if chart_type == "Area":
-                        # Layered area + line
-                        base = alt.Chart(df).encode(
-                            x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
-                            y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
-                            tooltip=[
-                                alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'),
-                                alt.Tooltip(f'{y_col}:Q', title='Rate', format='Rs ,.0f')
-                            ]
-                        )
-                        
-                        area = base.mark_area(color=color, opacity=0.3)
-                        line = base.mark_line(color=color, strokeWidth=3)
-                        points = base.mark_point(filled=True, color=color, size=50)
-                        
-                        chart = (area + line + points).properties(
-                            title=title,
-                            height=450
-                        ).configure_view(
-                            strokeWidth=0,
-                            fill='white'
-                        ).configure_axis(
-                            gridColor='#f0f0f0',
-                            labelFontSize=12,
-                            titleFontSize=14
-                        ).configure_title(
-                            fontSize=16,
-                            fontWeight=800,
-                            anchor='middle'
-                        )
+                    if len(df_chart) < 2:
+                        st.info("📊 Not enough data points for chart.")
                     else:
-                        # Line only
-                        chart = alt.Chart(df).mark_line(
-                            color=color,
-                            strokeWidth=3
-                        ).encode(
+                        # Create base chart
+                        base = alt.Chart(df_chart).encode(
                             x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
                             y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
                             tooltip=[
                                 alt.Tooltip('date:T', title='Date', format='%Y-%m-%d %H:%M'),
                                 alt.Tooltip(f'{y_col}:Q', title='Rate', format='Rs ,.0f')
                             ]
-                        ).properties(
+                        )
+                        
+                        if chart_type == "Area":
+                            # Layer area and line
+                            chart = (base.mark_area(color=color, opacity=0.3) + 
+                                    base.mark_line(color=color, strokeWidth=3) + 
+                                    base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
+                        else:
+                            # Line only
+                            chart = (base.mark_line(color=color, strokeWidth=3) + 
+                                    base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
+                        
+                        # Configure and display
+                        final_chart = chart.properties(
                             title=title,
                             height=450
                         ).configure_view(
@@ -486,17 +528,17 @@ if st.session_state.admin_auth:
                             fontWeight=800,
                             anchor='middle'
                         )
-                    
-                    st.altair_chart(chart, use_container_width=True)
-                    
-                    stats_cols = st.columns(4)
-                    stats_cols[0].metric("📈 Highest", f"Rs {df[y_col].max():,.0f}")
-                    stats_cols[1].metric("📉 Lowest", f"Rs {df[y_col].min():,.0f}")
-                    stats_cols[2].metric("📊 Average", f"Rs {df[y_col].mean():,.0f}")
-                    stats_cols[3].metric("📝 Records", f"{len(df)}")
-                    
+                        
+                        st.altair_chart(final_chart, use_container_width=True)
+                        
+                        # Metrics
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("📈 High", f"Rs {df_chart[y_col].max():,.0f}")
+                        c2.metric("📉 Low", f"Rs {df_chart[y_col].min():,.0f}")
+                        c3.metric("📊 Avg", f"Rs {df_chart[y_col].mean():,.0f}")
+                        c4.metric("📝 Count", len(df_chart))
                 else:
-                    st.info("📊 Not enough data. Need at least 2 records.")
+                    st.info("📊 Need 2+ records. Publish rates multiple times.")
         except Exception as e:
             st.error(f"Chart error: {str(e)}")
 
