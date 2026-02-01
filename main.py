@@ -9,13 +9,13 @@ from github import Github
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery V9", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery V10", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH ENGINE (The Magic for Auto-Updates)
+# AUTO-REFRESH ENGINE (5 SECONDS)
 # ---------------------------------------------------------
-# This forces the website to reload every 30 seconds to check for Admin updates
-st_autorefresh(interval=30000, key="gold_refresh") 
+# This refreshes the page every 5 seconds to check for your updates
+st_autorefresh(interval=5000, key="gold_refresh") 
 
 # 2. HELPER FUNCTIONS
 def update_premium(key, amount):
@@ -74,9 +74,22 @@ try:
 except Exception as e:
     print(f"GitHub Error: {e}")
 
-# 5. DATA ENGINE (Short Cache for Fast Updates)
-# TTL reduced to 30 seconds so it picks up Admin changes quickly
-@st.cache_data(ttl=30, show_spinner=False)
+# 5. SETTINGS ENGINE (SUPER FAST - 5 Seconds)
+# This checks your Admin changes every 5 seconds
+@st.cache_data(ttl=5, show_spinner=False)
+def load_settings():
+    default_settings = {"gold_premium": 0, "silver_premium": 0}
+    if repo:
+        try:
+            content = repo.get_contents("manual.json")
+            return json.loads(content.decoded_content.decode())
+        except:
+            pass
+    return default_settings
+
+# 6. DATA ENGINE (SAFE SPEED - 2 Minutes)
+# This saves your API credits so the site doesn't crash
+@st.cache_data(ttl=120, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
         return "ERROR: Secret Keys Missing"
@@ -85,15 +98,12 @@ def get_live_rates():
     CURR_KEY = st.secrets["CURR_KEY"]
 
     try:
-        # A. Get Metals
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals).json()
 
-        # B. Get Currency
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr).json()
         
-        # C. Extract Prices
         gold_price = 0
         silver_price = 0
         
@@ -102,7 +112,6 @@ def get_live_rates():
         if "XAG/USD" in metal_res and "price" in metal_res["XAG/USD"]:
             silver_price = float(metal_res['XAG/USD']['price'])
             
-        # Fallback values
         if gold_price == 0: gold_price = 2750.00
         if silver_price == 0: silver_price = 32.00 
         
@@ -116,18 +125,6 @@ def get_live_rates():
         }
     except Exception as e:
         return f"UNKNOWN ERROR: {str(e)}"
-
-# 6. SETTINGS ENGINE (Separate Cache for instant Admin updates)
-@st.cache_data(ttl=30, show_spinner=False)
-def load_settings():
-    default_settings = {"gold_premium": 0, "silver_premium": 0}
-    if repo:
-        try:
-            content = repo.get_contents("manual.json")
-            return json.loads(content.decoded_content.decode())
-        except:
-            pass
-    return default_settings
 
 # 7. LOAD EVERYTHING
 live_data = get_live_rates()
@@ -210,16 +207,13 @@ if st.session_state.admin_auth:
         if metal_choice == "Gold":
             st.subheader("🟡 Update Gold Premium")
             c1, c2, c3 = st.columns([1,1,2])
-            # FIX: Use on_click to prevent jumping bugs
             c1.button("- 500", key="g_sub", on_click=update_premium, args=("new_gold", -500))
             c2.button("+ 500", key="g_add", on_click=update_premium, args=("new_gold", 500))
-            # FIX: Use key binding for stable input
             st.number_input("Gold Premium (Rs)", key="new_gold", step=100)
         
         else:
             st.subheader("⚪ Update Silver Premium")
             d1, d2, d3 = st.columns([1,1,2])
-            # FIX: Use on_click here too
             d1.button("- 50", key="s_sub", on_click=update_premium, args=("new_silver", -50))
             d2.button("+ 50", key="s_add", on_click=update_premium, args=("new_silver", 50))
             st.number_input("Silver Premium (Rs)", key="new_silver", step=50)
@@ -257,7 +251,7 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("history.json", "Init Hist", json.dumps(history))
 
-                    st.success("✅ Updated! Users will see this in ~30 seconds.")
+                    st.success("✅ Updated! Users will see this in 5 seconds.")
                     manual_refresh() 
                     st.rerun()
                 except Exception as e:
