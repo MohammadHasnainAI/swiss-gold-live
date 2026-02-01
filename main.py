@@ -256,10 +256,13 @@ if st.session_state.admin_auth:
                     except:
                         history = []
                     
+                    # UPDATED: Added gold_ounce and silver_ounce to history
                     history.append({
                         "date": live_data['full_date'],
                         "gold_pk": float(gold_tola),
                         "silver_pk": float(silver_tola),
+                        "gold_ounce": float(live_data['gold']),
+                        "silver_ounce": float(live_data['silver']),
                         "usd": float(live_data['usd'])
                     })
                     if len(history) > 60: history = history[-60:]
@@ -293,7 +296,9 @@ if st.session_state.admin_auth:
         with detail_cols[1]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["silver"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {silver_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Premium Applied:</strong> Rs {int(st.session_state.new_silver)}</p></div>', unsafe_allow_html=True)
     
-    # TAB 3: HISTORY
+    # ==========================================
+    # TAB 3: HISTORY (WITH OUNCE COLUMN)
+    # ==========================================
     with tabs[2]:
         st.markdown("### 📜 Rate History Log")
         
@@ -335,7 +340,20 @@ if st.session_state.admin_auth:
                 if history_data and len(history_data) > 0:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
-                    df = df.rename(columns={'date': 'Date/Time', 'gold_pk': 'Gold (PKR)', 'silver_pk': 'Silver (PKR)', 'usd': 'USD Rate'})
+                    
+                    # UPDATED: Added Gold Ounce and Silver Ounce columns
+                    df = df.rename(columns={
+                        'date': 'Date/Time',
+                        'gold_pk': 'Gold PKR',
+                        'silver_pk': 'Silver PKR',
+                        'gold_ounce': 'Gold Oz ($)',
+                        'silver_ounce': 'Silver Oz ($)',
+                        'usd': 'USD Rate'
+                    })
+                    
+                    # Reorder columns to put Ounce next to respective metal
+                    column_order = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
+                    df = df[column_order]
                     
                     st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
                     
@@ -346,7 +364,9 @@ if st.session_state.admin_auth:
         except:
             st.info("📭 History is empty.")
     
+    # ==========================================
     # TAB 4: CHARTS (FIXED LINE AND AREA)
+    # ==========================================
     with tabs[3]:
         st.markdown("### 📈 Price Trends Analysis")
         
@@ -421,9 +441,10 @@ if st.session_state.admin_auth:
                         )
                         
                         area = base.mark_area(color=color, opacity=0.3)
-                        line = base.mark_line(color=color, strokeWidth=3).mark_point(filled=True, color=color, size=50)
+                        line = base.mark_line(color=color, strokeWidth=3)
+                        points = base.mark_point(filled=True, color=color, size=50)
                         
-                        chart = (area + line).properties(
+                        chart = (area + line + points).properties(
                             title=title,
                             height=450
                         ).configure_view(
