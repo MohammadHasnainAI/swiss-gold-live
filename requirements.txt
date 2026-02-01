@@ -5,3 +5,4 @@ altair
 PyGithub
 streamlit-autorefresh
 pytz
+streamlit-autorefresh
