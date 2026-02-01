@@ -1,12 +1,12 @@
 import streamlit as st
 import requests
 import json
+import time
 from datetime import datetime
 import pytz
 import pandas as pd
 import altair as alt
 from github import Github
-from streamlit_autorefresh import st_autorefresh
 
 # ---------------------------------------------------------
 # 1. PAGE CONFIGURATION
@@ -16,19 +16,22 @@ st.set_page_config(page_title="Islam Jewellery Pro", page_icon="💎", layout="c
 # ---------------------------------------------------------
 # 2. INITIALIZE SESSION STATE
 # ---------------------------------------------------------
-if "admin_auth" not in st.session_state:
-    st.session_state.admin_auth = False
+defaults = {
+    "admin_auth": False,
+    "new_gold": 0,
+    "new_silver": 0,
+    "gold_market_status": "OPEN",
+    "silver_market_status": "OPEN",
+    "selected_metal": "Gold",
+    "settings_loaded": False
+}
+
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 # ---------------------------------------------------------
-# 3. AUTO-REFRESH ENGINE (The Fix)
-# ---------------------------------------------------------
-# LOGIC: If User is NOT Admin -> Refresh every 5 seconds
-# If User IS Admin -> Do NOT refresh (so you can type)
-if not st.session_state.admin_auth:
-    count = st_autorefresh(interval=5000, limit=None, key="public_refresh")
-
-# ---------------------------------------------------------
-# 4. CSS STYLING (Ultra Compact)
+# 3. CSS STYLING (Ultra Compact)
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -63,11 +66,12 @@ st.markdown("""
 /* Admin */
 .control-box {background: #ffffff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 15px; margin-bottom: 15px;}
 .closed-card {background:#ffffff; border-radius:16px; padding:20px; text-align:center; box-shadow:0 4px 6px rgba(220,38,38,0.05); border:2px solid #fee2e2; margin-bottom:8px;}
+.metric-card-pro {background: white; border-radius: 12px; padding: 1rem; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-bottom: 3px solid #d4af37; text-align: center;}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 5. GITHUB CONNECTION
+# 4. GITHUB CONNECTION
 # ---------------------------------------------------------
 repo = None 
 try:
@@ -78,8 +82,10 @@ except Exception as e:
     st.error(f"GitHub Error: {e}")
 
 # ---------------------------------------------------------
-# 6. DATA & SETTINGS ENGINE
+# 5. DATA ENGINE (PROTECTED WITH CACHE)
 # ---------------------------------------------------------
+# ⚠️ SAFETY: Caches API for 2 mins so 5s refresh doesn't drain credits
+@st.cache_data(ttl=120, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
         return {"gold": 2750, "silver": 32, "usd": 278, "aed": 3.67, "time": "Demo"}
@@ -105,7 +111,7 @@ def get_live_rates():
     except:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Offline"}
 
-# Caching Settings for 5 seconds (This connects to GitHub)
+# ⚠️ SETTINGS: Caches for 5s so users see Admin updates quickly
 @st.cache_data(ttl=5, show_spinner=False)
 def load_settings_from_github():
     if repo:
@@ -121,21 +127,22 @@ live_data = get_live_rates()
 settings = load_settings_from_github()
 
 # State Management
-if "new_gold" not in st.session_state: st.session_state.new_gold = settings.get("gold_premium", 0)
-if "new_silver" not in st.session_state: st.session_state.new_silver = settings.get("silver_premium", 0)
-if "gold_market_status" not in st.session_state: st.session_state.gold_market_status = settings.get("gold_market", "OPEN")
-if "silver_market_status" not in st.session_state: st.session_state.silver_market_status = settings.get("silver_market", "OPEN")
-if "selected_metal" not in st.session_state: st.session_state.selected_metal = "Gold"
+if not st.session_state.settings_loaded:
+    st.session_state.new_gold = settings.get("gold_premium", 0)
+    st.session_state.new_silver = settings.get("silver_premium", 0)
+    st.session_state.gold_market_status = settings.get("gold_market", "OPEN")
+    st.session_state.silver_market_status = settings.get("silver_market", "OPEN")
+    st.session_state.settings_loaded = True
 
 # ---------------------------------------------------------
-# 7. CALCULATIONS
+# 6. CALCULATIONS
 # ---------------------------------------------------------
 gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_gold
 silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_silver
 gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 
 # ---------------------------------------------------------
-# 8. PUBLIC UI DISPLAY
+# 7. PUBLIC UI DISPLAY
 # ---------------------------------------------------------
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
@@ -165,11 +172,6 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# REFRESH BUTTON (For Manual Update)
-if st.button("🔄 Check for New Prices", use_container_width=True):
-    load_settings_from_github.clear()
-    st.rerun()
-
 # SILVER CARD
 if st.session_state.silver_market_status == "OPEN":
     st.markdown(f"""
@@ -194,7 +196,7 @@ else:
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 9. ADMIN DASHBOARD
+# 8. ADMIN DASHBOARD
 # ---------------------------------------------------------
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
@@ -216,7 +218,6 @@ if st.session_state.admin_auth:
 
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
 
-    # --- TAB 1: UPDATE ---
     with tabs[0]:
         st.markdown("### 🌐 Market Status")
         col1, col2 = st.columns(2)
@@ -304,7 +305,7 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("history.json", "Log Init", json.dumps(history))
 
-                    # FORCE CACHE CLEARING so users see it immediately
+                    # 3. FORCE CACHE CLEARING
                     load_settings_from_github.clear()
                     
                     st.success("✅ Published! Users will see updates shortly.")
@@ -316,13 +317,18 @@ if st.session_state.admin_auth:
 
     # --- TAB 2: STATISTICS ---
     with tabs[1]:
-        st.metric("Gold Premium", f"Rs {st.session_state.new_gold}")
-        st.metric("Silver Premium", f"Rs {st.session_state.new_silver}")
-        st.metric("USD Rate", f"Rs {live_data['usd']:.2f}")
+        st.markdown("### Market Overview")
+        sc1, sc2, sc3 = st.columns(3)
+        with sc1:
+            st.markdown(f'<div class="metric-card-pro"><div style="font-size:0.7rem;">GOLD PREMIUM</div><div style="font-size:1.5rem; color:#d4af37;">Rs {st.session_state.new_gold}</div></div>', unsafe_allow_html=True)
+        with sc2:
+            st.markdown(f'<div class="metric-card-pro"><div style="font-size:0.7rem;">SILVER PREMIUM</div><div style="font-size:1.5rem; color:#666;">Rs {st.session_state.new_silver}</div></div>', unsafe_allow_html=True)
+        with sc3:
+            st.markdown(f'<div class="metric-card-pro"><div style="font-size:0.7rem;">USD RATE</div><div style="font-size:1.5rem; color:#333;">Rs {live_data["usd"]:.2f}</div></div>', unsafe_allow_html=True)
 
     # --- TAB 3: HISTORY ---
     with tabs[2]:
-        if st.button("🗑️ Clear History", type="secondary"):
+        if st.button("🗑️ Clear History (Fixes Errors)", type="secondary"):
             if repo:
                 h = repo.get_contents("history.json")
                 repo.update_file(h.path, "Reset", json.dumps([]), h.sha)
@@ -338,8 +344,8 @@ if st.session_state.admin_auth:
                     display_df = pd.DataFrame({
                         'Date': df.get('date', 'N/A'),
                         'Gold Rate': df.get('gold_pk', 0).apply(lambda x: f"Rs {x:,.0f}"),
-                        'Gold Oz': df.get('gold_ounce', 0).apply(lambda x: f"${x:,.2f}"),
-                        'USD': df.get('usd', 0).apply(lambda x: f"Rs {x:.2f}")
+                        'Gold Oz ($)': df.get('gold_ounce', 0).apply(lambda x: f"${x:,.2f}"),
+                        'USD Rate': df.get('usd', 0).apply(lambda x: f"Rs {x:.2f}")
                     })
                     st.dataframe(display_df.iloc[::-1], use_container_width=True, hide_index=True)
                 else:
@@ -364,10 +370,18 @@ if st.session_state.admin_auth:
         except:
             st.info("Chart data unavailable.")
 
-# 10. FOOTER AND REFRESH INDICATOR
-st.markdown(f"""
-<div style="text-align:center; margin-top:20px; color:#aaa; font-size:0.7rem;">
+# ---------------------------------------------------------
+# 10. REFRESH LOGIC (Native - No External Library)
+# ---------------------------------------------------------
+# This forces the page to reload every 5 seconds for Public Users
+if not st.session_state.admin_auth:
+    time.sleep(5)
+    st.rerun()
+
+# 11. FOOTER
+st.markdown("""
+<div class="footer">
 Islam Jewellery • Live Market Rates<br>
-Page Refreshed: {datetime.now(pytz.timezone("Asia/Karachi")).strftime("%H:%M:%S")}
+Updated: {}
 </div>
-""", unsafe_allow_html=True)
+""".format(datetime.now(pytz.timezone("Asia/Karachi")).strftime("%H:%M:%S")), unsafe_allow_html=True)
