@@ -1,10 +1,11 @@
 import streamlit as st
 import requests
 import json
-import pandas as pd
-import altair as alt
+import time
 from datetime import datetime
 import pytz
+import pandas as pd
+import altair as alt
 from github import Github
 
 # ---------------------------------------------------------
@@ -80,7 +81,7 @@ def get_live_rates():
     except:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Offline"}
 
-# Settings Engine (Cached 2 Seconds for fast Admin updates)
+# Settings Engine
 @st.cache_data(ttl=2, show_spinner=False)
 def get_settings():
     default = {"gold_premium": 0, "silver_premium": 0, "gold_market": "OPEN", "silver_market": "OPEN"}
@@ -97,7 +98,6 @@ def get_settings():
 # ---------------------------------------------------------
 # 4. PUBLIC INTERFACE (AUTO-REFRESHING FRAGMENT)
 # ---------------------------------------------------------
-# @st.fragment is the NEW Native way to auto-refresh specific parts
 @st.fragment(run_every=5) 
 def show_public_dashboard():
     # 1. Get Fresh Data
@@ -161,7 +161,6 @@ def show_public_dashboard():
     # 6. Buttons
     st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
     
-    # 7. Refresh Indicator (Proof it works)
     st.markdown(f"""<div style="text-align:center; margin-top:20px; color:#aaa; font-size:0.6rem;">Auto-Sync Active • {datetime.now(pytz.timezone("Asia/Karachi")).strftime("%H:%M:%S")}</div>""", unsafe_allow_html=True)
 
 
@@ -169,10 +168,8 @@ def show_public_dashboard():
 # 5. MAIN LOGIC ROUTER
 # ---------------------------------------------------------
 if not st.session_state.admin_auth:
-    # USER VIEW: Runs inside the auto-refresh fragment
     show_public_dashboard()
     
-    # Admin Login Button (Outside fragment so it doesn't refresh while typing)
     with st.expander("🔒 Admin Login"):
         pwd = st.text_input("Password", type="password")
         if st.button("Login"):
@@ -183,7 +180,7 @@ if not st.session_state.admin_auth:
                 st.error("Wrong Password")
 
 else:
-    # ADMIN VIEW (No Auto-Refresh here, so you can type comfortably)
+    # ADMIN VIEW
     st.markdown("---")
     c1, c2 = st.columns([3,1])
     c1.subheader("⚙️ Admin Dashboard")
@@ -191,10 +188,9 @@ else:
         st.session_state.admin_auth = False
         st.rerun()
 
-    # Load current settings for editing
     settings, repo = get_settings()
     
-    # Initialize session state for editing if needed
+    # Init Session Vars for Editing
     if "edit_gold" not in st.session_state: st.session_state.edit_gold = settings.get("gold_premium", 0)
     if "edit_silver" not in st.session_state: st.session_state.edit_silver = settings.get("silver_premium", 0)
     
@@ -204,27 +200,24 @@ else:
         st.markdown("### 🌐 Market Status")
         col1, col2 = st.columns(2)
         
-        # Toggle Logic
         new_gold_status = "OPEN" if settings.get("gold_market") == "OPEN" else "CLOSED"
         new_silver_status = "OPEN" if settings.get("silver_market") == "OPEN" else "CLOSED"
         
-        if col1.button(f"Gold is {new_gold_status} (Click to Toggle)"):
+        if col1.button(f"Gold is {new_gold_status} (Toggle)"):
             new_gold_status = "CLOSED" if new_gold_status == "OPEN" else "OPEN"
             
-        if col2.button(f"Silver is {new_silver_status} (Click to Toggle)"):
+        if col2.button(f"Silver is {new_silver_status} (Toggle)"):
             new_silver_status = "CLOSED" if new_silver_status == "OPEN" else "OPEN"
 
         st.divider()
         st.markdown("### 💰 Premiums")
         
-        # Gold Controls
         st.write("🟡 **Gold Premium**")
         gc1, gc2 = st.columns(2)
         if gc1.button("- 500", key="g_sub"): st.session_state.edit_gold -= 500
         if gc2.button("+ 500", key="g_add"): st.session_state.edit_gold += 500
         st.session_state.edit_gold = st.number_input("Gold Value", value=st.session_state.edit_gold, step=500)
 
-        # Silver Controls
         st.write("⚪ **Silver Premium**")
         sc1, sc2 = st.columns(2)
         if sc1.button("- 50", key="s_sub"): st.session_state.edit_silver -= 50
@@ -233,7 +226,7 @@ else:
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # SAVE BUTTON
+        # --- FIXED SAVE BUTTON LOGIC (Solves the SHA Error) ---
         if st.button("🚀 SAVE & PUBLISH CHANGES", type="primary", use_container_width=True):
             if repo:
                 new_data = {
@@ -243,37 +236,42 @@ else:
                     "silver_market": new_silver_status
                 }
                 
-                # Save Settings
+                # 1. Update Settings with Fresh SHA
                 try:
-                    c = repo.get_contents("manual.json")
-                    repo.update_file(c.path, "Update", json.dumps(new_data), c.sha)
+                    # FETCH FRESH FILE CONTENT & SHA IMMEDIATELY BEFORE UPDATING
+                    file = repo.get_contents("manual.json")
+                    repo.update_file(file.path, "Update", json.dumps(new_data), file.sha)
                 except:
                     repo.create_file("manual.json", "Init", json.dumps(new_data))
                 
-                # Save History
+                # 2. Update History with Fresh SHA
                 live = get_live_rates()
                 try:
-                    h = repo.get_contents("history.json")
-                    hist_data = json.loads(h.decoded_content.decode())
+                    h_file = repo.get_contents("history.json")
+                    hist_data = json.loads(h_file.decoded_content.decode())
+                    
+                    hist_data.append({
+                        "date": live['full_date'],
+                        "gold_pk": ((live['gold']/31.1035)*11.66*live['usd']) + st.session_state.edit_gold,
+                        "gold_ounce": live['gold'],
+                        "usd": live['usd']
+                    })
+                    if len(hist_data) > 60: hist_data = hist_data[-60:]
+                    
+                    # Update with the FRESH sha we just got
+                    repo.update_file(h_file.path, "Log", json.dumps(hist_data), h_file.sha)
                 except:
-                    hist_data = []
-                
-                hist_data.append({
-                    "date": live['full_date'],
-                    "gold_pk": ((live['gold']/31.1035)*11.66*live['usd']) + st.session_state.edit_gold,
-                    "gold_ounce": live['gold'],
-                    "usd": live['usd']
-                })
-                if len(hist_data) > 60: hist_data = hist_data[-60:]
-                
-                try:
-                    repo.update_file(h.path, "Log", json.dumps(hist_data), h.sha)
-                except:
+                    hist_data = [{
+                        "date": live['full_date'],
+                        "gold_pk": ((live['gold']/31.1035)*11.66*live['usd']) + st.session_state.edit_gold,
+                        "gold_ounce": live['gold'],
+                        "usd": live['usd']
+                    }]
                     repo.create_file("history.json", "Init", json.dumps(hist_data))
                 
-                # Clear Cache to show updates immediately
+                # Clear Cache
                 get_settings.clear()
-                st.success("✅ Published!")
+                st.success("✅ Published! Auto-Refresh will show changes in ~5s.")
                 time.sleep(1)
                 st.rerun()
 
@@ -281,9 +279,12 @@ else:
     with tabs[1]:
         if st.button("Clear History"):
             if repo:
-                h = repo.get_contents("history.json")
-                repo.update_file(h.path, "Reset", json.dumps([]), h.sha)
-                st.rerun()
+                try:
+                    h = repo.get_contents("history.json")
+                    repo.update_file(h.path, "Reset", json.dumps([]), h.sha)
+                    st.rerun()
+                except:
+                    pass
         
         try:
             if repo:
