@@ -1,8 +1,7 @@
-streamlit
-requests
-pandas
-plotly
-PyGithub
-altair
-streamlit-autorefresh
-yfinance
+streamlit==1.33.0
+requests==2.31.0
+pytz==2024.1
+pandas==2.2.1
+altair==5.2.0
+PyGithub==2.3.0
+yfinance==0.2.40
