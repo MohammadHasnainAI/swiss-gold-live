@@ -23,10 +23,10 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
 #MainMenu, footer, header {visibility:hidden;}
-.block-container {padding-top: 0rem !important; padding-bottom: 1rem !important; margin-top: -40px !important; max-width: 700px;}
-.header-box {text-align:center; padding-bottom:5px; margin-bottom:10px; margin-top: 15px;}
-.brand-title {font-size:1.8rem; font-weight:800; color:#111; letter-spacing:-0.5px; text-transform:uppercase; line-height: 1; margin-bottom: 2px;}
-.brand-subtitle {font-size:0.65rem; color:#d4af37; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;}
+.block-container {padding-top: 0rem !important; padding-bottom: 1rem !important; margin-top: -20px !important; max-width: 700px;}
+.header-box {text-align:center; padding: 15px 0; margin-bottom:15px; margin-top: 10px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 12px; color: white;}
+.brand-title {font-size:2rem; font-weight:800; color:#d4af37; letter-spacing:-0.5px; text-transform:uppercase; line-height: 1.2; margin-bottom: 5px;}
+.brand-subtitle {font-size:0.75rem; color:#fff; font-weight:600; letter-spacing:2px; text-transform:uppercase; opacity: 0.8;}
 .price-card {background:#ffffff; border-radius:16px; padding:15px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.04); border:1px solid #eef0f2; margin-bottom:8px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .big-price {font-size:2.6rem; font-weight:800; color:#222; line-height:1; margin:4px 0; letter-spacing:-1px;}
@@ -48,7 +48,6 @@ st.markdown("""
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
-/* Update notification */
 .update-toast {
     position: fixed;
     top: 20px;
@@ -93,7 +92,7 @@ except Exception as e:
     print(f"GitHub Error: {e}")
 
 # 5. SETTINGS ENGINE
-@st.cache_data(ttl=3, show_spinner=False)  # Check every 3 seconds for updates
+@st.cache_data(ttl=3, show_spinner=False)
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
     if repo:
@@ -154,10 +153,9 @@ if "confirm_reset_chart" not in st.session_state:
 if "last_seen_update" not in st.session_state:
     st.session_state.last_seen_update = settings.get("last_update", 0)
 
-# CHECK FOR UPDATES (Silent background check every 3 seconds via cache)
+# CHECK FOR UPDATES
 current_update_time = settings.get("last_update", 0)
 if current_update_time > st.session_state.last_seen_update:
-    # NEW UPDATE DETECTED!
     st.session_state.last_seen_update = current_update_time
     st.session_state.new_gold = int(settings.get("gold_premium", 0))
     st.session_state.new_silver = int(settings.get("silver_premium", 0))
@@ -165,7 +163,7 @@ if current_update_time > st.session_state.last_seen_update:
 else:
     st.session_state.show_update_notification = False
 
-# Show update notification and auto-refresh
+# Show update notification
 if st.session_state.get("show_update_notification", False):
     st.markdown("""
     <div class="update-toast">
@@ -174,10 +172,9 @@ if st.session_state.get("show_update_notification", False):
     </div>
     <meta http-equiv="refresh" content="1">
     """, unsafe_allow_html=True)
-    # Clear notification flag
     st.session_state.show_update_notification = False
 
-# Show checking indicator (only for admin)
+# Show checking indicator for admin
 if st.session_state.admin_auth:
     st.markdown('<div class="checking-indicator">● Live Monitoring</div>', unsafe_allow_html=True)
 
@@ -194,8 +191,13 @@ except Exception as e:
     silver_tola = 0
     gold_dubai_tola = 0
 
-# 9. MAIN DISPLAY
-st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
+# 9. MAIN DISPLAY - FIXED HEADER
+st.markdown("""
+<div class="header-box">
+    <div class="brand-title">Islam Jewellery</div>
+    <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown(f"""
 <div class="price-card">
@@ -331,18 +333,16 @@ if st.session_state.admin_auth:
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # PUBLISH BUTTON - TRIGGERS GLOBAL UPDATE
+        # PUBLISH BUTTON
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
             if repo:
                 try:
-                    # Create new settings with timestamp
                     new_settings = {
                         "gold_premium": int(st.session_state.new_gold), 
                         "silver_premium": int(st.session_state.new_silver),
-                        "last_update": int(time.time())  # This triggers all users to refresh!
+                        "last_update": int(time.time())
                     }
                     
-                    # Update manual.json
                     try:
                         contents = repo.get_contents("manual.json")
                         repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", 
@@ -350,7 +350,6 @@ if st.session_state.admin_auth:
                     except Exception:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
-                    # Update History
                     try:
                         h_content = repo.get_contents("history.json")
                         history = json.loads(h_content.decoded_content.decode())
@@ -382,7 +381,6 @@ if st.session_state.admin_auth:
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Update local timestamp and refresh admin page
                     st.session_state.last_seen_update = new_settings["last_update"]
                     time.sleep(1)
                     st.rerun()
@@ -392,7 +390,7 @@ if st.session_state.admin_auth:
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
     
-    # TAB 2: Statistics
+    # TAB 2: Statistics - FIXED TYPO HERE (was unsafe_encode_html, now unsafe_allow_html)
     with tabs[1]:
         st.markdown("### Market Overview")
         st.info("💡 System checks for admin updates every 3 seconds. Users auto-refresh only when you publish changes.")
@@ -401,7 +399,8 @@ if st.session_state.admin_auth:
         with stats_cols[0]:
             st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(st.session_state.new_gold):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[1]:
-            st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;"><div style="font-size: 2rem;">⚪</div><div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Silver Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div>', unsafe_encode_html=True)
+            # FIXED: was unsafe_encode_html, changed to unsafe_allow_html
+            st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;"><div style="font-size: 2rem;">⚪</div><div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Silver Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[2]:
             st.markdown(f'<div style="background: linear-gradient(135deg, #d4af37 0%, #f4e5c2 100%); color: #1a1a1a; border-radius: 12px; padding: 1.5rem; text-align: center;"><div style="font-size: 2rem;">💵</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">USD/PKR</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {live_data["usd"]:.2f}</div></div>', unsafe_allow_html=True)
         
