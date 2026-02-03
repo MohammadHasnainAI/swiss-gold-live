@@ -282,7 +282,9 @@ if not st.session_state.admin_auth:
         with col2:
             password = st.text_input("Password", type="password", placeholder="Enter password...", key="admin_pass")
             if st.button("🔓 Login", use_container_width=True, type="primary"):
-                if password == "123123":
+                # SECURE PASSWORD CHECK FROM SECRETS
+                admin_pass = st.secrets.get("ADMIN_PASSWORD", "123123")
+                if password == admin_pass:
                     st.session_state.admin_auth = True
                     clear_all_caches()
                     st.rerun()
@@ -414,7 +416,7 @@ if st.session_state.admin_auth:
                     try:
                         contents = repo.get_contents("manual.json")
                         repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", 
-                                       json.dumps(new_settings), contents.sha)
+                                         json.dumps(new_settings), contents.sha)
                     except Exception:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
@@ -439,7 +441,7 @@ if st.session_state.admin_auth:
                     
                     try:
                         repo.update_file(h_content.path, f"Hist - {datetime.now().strftime('%H:%M')}", 
-                                       json.dumps(history), h_content.sha)
+                                         json.dumps(history), h_content.sha)
                     except Exception:
                         repo.create_file("history.json", "Init", json.dumps(history))
                     
