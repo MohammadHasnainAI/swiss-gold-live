@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v35.1", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v36.0", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -24,6 +24,7 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
+.block-container {padding-top: 0rem !important; padding-bottom: 1rem !important; margin-top: -10px !important; max-width: 700px;}
 .header-box {text-align:center; padding: 20px 0; margin-bottom:15px; margin-top: 10px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);}
 .brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.2; margin-bottom: 8px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);}
 .brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.9;}
@@ -106,6 +107,7 @@ def get_live_rates():
     current_hour = now_khi.hour
     
     # Smart Logic: Active hours 07:00 to 23:59
+    # Hours 7, 8, ... 23.
     is_active_hours = 7 <= current_hour <= 23
     
     debug_logs = []
