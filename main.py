@@ -11,7 +11,7 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v41.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v42.0", page_icon="💎", layout="centered")
 
 # 2. AUTO-REFRESH LOGIC (20s Interval)
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
@@ -33,7 +33,7 @@ def clear_all_caches():
     get_live_rates.clear()
     load_settings.clear()
 
-# 5. CSS STYLES (Includes Admin Styles)
+# 5. CSS STYLES
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
@@ -167,7 +167,7 @@ def get_live_rates():
         except Exception as e:
             debug_logs.append(f"Yahoo Error: {str(e)}")
 
-    # 4. Currency
+    # 4. Currency (ExchangeRate-API)
     try:
         if "CURR_KEY" in st.secrets:
             CURR_KEY = st.secrets["CURR_KEY"]
@@ -183,6 +183,19 @@ def get_live_rates():
             debug_logs.append("Missing CURR_KEY")
     except Exception as e:
         debug_logs.append(f"Currency Exception: {str(e)}")
+
+    # 5. CURRENCY BACKUP (Yahoo Finance) - NEW!
+    if usd_rate == 0:
+        try:
+            debug_logs.append("Trying Yahoo Currency Backup...")
+            curr_tick = yf.Ticker("PKR=X")
+            curr_hist = curr_tick.history(period="1d")
+            if not curr_hist.empty:
+                usd_rate = float(curr_hist['Close'].iloc[-1])
+                aed_rate = 3.67 # Fixed peg
+                debug_logs.append("Success: Used Yahoo Currency")
+        except Exception as e:
+            debug_logs.append(f"Yahoo Currency Error: {str(e)}")
 
     return {
         "gold": gold_price, "silver": silver_price, "usd": usd_rate, "aed": aed_rate,
@@ -214,11 +227,8 @@ except:
     settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
 
 # 10. SYNC AND AUTO-UPDATE CHECK
-# This makes sure Admin sees current values from repo, not just session
-if st.session_state.new_gold == 0:
-    st.session_state.new_gold = int(settings.get("gold_premium", 0))
-if st.session_state.new_silver == 0:
-    st.session_state.new_silver = int(settings.get("silver_premium", 0))
+st.session_state.new_gold = int(settings.get("gold_premium", 0))
+st.session_state.new_silver = int(settings.get("silver_premium", 0))
 
 if settings.get("last_update", 0) > st.session_state.last_seen_update:
     if not st.session_state.get("is_admin_publishing", False):
@@ -429,12 +439,6 @@ if st.session_state.admin_auth:
             </div>
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
-        
-        # PUBLISH BUTTON
-        publish_disabled = st.session_state.get("publishing", False)
-        
-        if publish_disabled:
-            st.warning("⏳ Publishing... Please wait")
         
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True, disabled=publish_disabled):
             if repo and not publish_disabled:
