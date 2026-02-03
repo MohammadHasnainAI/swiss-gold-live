@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v34.1", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v35.0", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -91,13 +91,13 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - SMART THROTTLE & HYBRID SOURCES
+# 6. DATA ENGINE - SMART THROTTLE (PAKISTAN TIME)
 @st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
     """
-    SMART SCHEDULE (PKT TIME):
-    - 11 AM to 10 PM: Fast Updates (Every ~90 sec) - Active Market
-    - 10 PM to 11 AM: Slow Updates (Every ~15 min) - Save Credits
+    SMART SCHEDULE (PAKISTAN TIME):
+    - 07:00 AM to 11:59 PM: Fast Updates (Active)
+    - 12:00 AM to 06:59 AM: Slow Updates (Sleep)
     """
     
     # 1. Determine "Smart Cache" Duration
@@ -105,11 +105,9 @@ def get_live_rates():
     now_khi = datetime.now(tz_khi)
     current_hour = now_khi.hour
     
-    # Smart Logic: Active hours 11:00 to 22:00 (10 PM)
-    is_active_hours = 11 <= current_hour < 22
-    
-    # We use a trick: If it's night time, we might return old data to save hits
-    # But since Streamlit controls cache via TTL, we handle this by logic below
+    # Smart Logic: Active hours 07:00 to 23:59
+    # Hours 7, 8, ... 23.
+    is_active_hours = 7 <= current_hour <= 23
     
     debug_logs = []
     
@@ -227,10 +225,13 @@ try:
     tz_khi = pytz.timezone("Asia/Karachi")
     cur_hour = datetime.now(tz_khi).hour
     
-    # DYNAMIC THROTTLE
-    # Day (11am-10pm): 90 seconds
-    # Night: 900 seconds (15 mins)
-    wait_time = 90 if (11 <= cur_hour < 22) else 900
+    # DYNAMIC THROTTLE LOGIC (PAKISTAN TIME)
+    # Day (07:00 - 23:59): 90 seconds (Fast)
+    # Night (00:00 - 06:59): 1800 seconds (30 Mins - Slow)
+    if 7 <= cur_hour <= 23:
+        wait_time = 90  # 1.5 Minutes
+    else:
+        wait_time = 1800 # 30 Minutes
     
     if (current_ts - st.session_state.last_api_call) > wait_time:
         clear_all_caches() # Force refresh
