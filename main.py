@@ -7,20 +7,15 @@ import pandas as pd
 import altair as alt
 from github import Github
 import time
-import threading
 
 # 1. PAGE CONFIG
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
-
-# FORCE CLEAR ALL CACHES ON LOAD
-st.cache_data.clear()
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
     """Clear all caches to ensure fresh data"""
     st.cache_data.clear()
     get_live_rates.clear()
-    load_settings.clear()
 
 # 3. CSS STYLES
 st.markdown("""
@@ -84,10 +79,6 @@ st.markdown("""
     z-index: 9999;
     border: 1px solid #d4af37;
 }
-.publish-loading {
-    pointer-events: none;
-    opacity: 0.6;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -100,10 +91,11 @@ try:
 except Exception as e:
     st.error(f"GitHub Connection Failed: {e}")
 
-# 5. SETTINGS ENGINE - NO CACHE FOR CRITICAL DATA
+# 5. SETTINGS ENGINE - WITH CACHE FOR AUTO-REFRESH TO WORK
+@st.cache_data(ttl=3, show_spinner=False)
 def load_settings():
-    """Load settings directly from GitHub without cache to ensure fresh data"""
-    default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0, "update_id": ""}
+    """Load settings from GitHub with short cache for update detection"""
+    default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
     if repo:
         try:
             content = repo.get_contents("manual.json")
@@ -159,7 +151,7 @@ except:
 try:
     settings = load_settings()
 except:
-    settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0, "update_id": ""}
+    settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
 
 # Initialize Session States with safe defaults
 if "new_gold" not in st.session_state: 
@@ -178,23 +170,15 @@ if "last_seen_update" not in st.session_state:
     st.session_state.last_seen_update = settings.get("last_update", 0)
 if "publishing" not in st.session_state:
     st.session_state.publishing = False
-if "fresh_load" not in st.session_state:
-    st.session_state.fresh_load = True
-
-# FORCE FRESH LOAD ON FIRST RUN
-if st.session_state.fresh_load:
-    clear_all_caches()
-    live_data = get_live_rates()
-    settings = load_settings()
-    st.session_state.fresh_load = False
 
 # CHECK FOR UPDATES FROM ADMIN
 current_update_time = settings.get("last_update", 0)
-current_update_id = settings.get("update_id", "")
 
 if current_update_time > st.session_state.last_seen_update:
     # NEW UPDATE DETECTED - Force reload everything
     st.session_state.last_seen_update = current_update_time
+    
+    # Clear caches to get fresh data
     clear_all_caches()
     
     # Reload fresh data
@@ -213,11 +197,9 @@ if st.session_state.get("show_update_notification", False):
         🔔 Admin Updated Prices!<br>
         <span style="font-size: 0.85rem;">Refreshing to show new rates...</span>
     </div>
+    <meta http-equiv="refresh" content="1">
     """, unsafe_allow_html=True)
     st.session_state.show_update_notification = False
-    # Small delay then refresh to show new data
-    time.sleep(0.5)
-    st.rerun()
 
 # Show checking indicator for admin
 if st.session_state.admin_auth:
@@ -231,9 +213,13 @@ try:
     usd_rate = float(live_data.get('usd', 278.0))
     aed_rate = float(live_data.get('aed', 3.67))
     
+    # Get premiums from settings (not session state, to ensure sync)
+    gold_premium = float(settings.get("gold_premium", 0))
+    silver_premium = float(settings.get("silver_premium", 0))
+    
     # Calculate prices
-    gold_tola = ((gold_ounce / 31.1035) * 11.66 * usd_rate) + float(settings.get("gold_premium", 0))
-    silver_tola = ((silver_ounce / 31.1035) * 11.66 * usd_rate) + float(settings.get("silver_premium", 0))
+    gold_tola = ((gold_ounce / 31.1035) * 11.66 * usd_rate) + gold_premium
+    silver_tola = ((silver_ounce / 31.1035) * 11.66 * usd_rate) + silver_premium
     gold_dubai_tola = (gold_ounce / 31.1035) * 11.66 * aed_rate
     
     # Ensure no negative or unrealistic values
@@ -249,6 +235,8 @@ except Exception as e:
     gold_ounce = 2750.0
     silver_ounce = 32.0
     usd_rate = 278.0
+    gold_premium = 0
+    silver_premium = 0
 
 # 9. MAIN DISPLAY
 st.markdown("""
@@ -257,9 +245,6 @@ st.markdown("""
     <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
 </div>
 """, unsafe_allow_html=True)
-
-# DEBUG INFO (remove in production)
-# st.write(f"Debug - Gold: {gold_ounce}, USD: {usd_rate}, Premium: {settings.get('gold_premium', 0)}")
 
 st.markdown(f"""
 <div class="price-card">
@@ -305,7 +290,6 @@ if not st.session_state.admin_auth:
             if st.button("🔓 Login", use_container_width=True, type="primary"):
                 if password == "123123":
                     st.session_state.admin_auth = True
-                    # Reload fresh data on login
                     clear_all_caches()
                     st.rerun()
                 else:
@@ -404,9 +388,7 @@ if st.session_state.admin_auth:
         publish_disabled = st.session_state.get("publishing", False)
         
         if publish_disabled:
-            st.warning("⏳ Publishing in progress... Please wait")
-            # Reset after 3 seconds
-            st.session_state.publishing = False
+            st.warning("⏳ Publishing... Please wait")
         
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True, disabled=publish_disabled):
             if repo and not publish_disabled:
@@ -414,27 +396,23 @@ if st.session_state.admin_auth:
                 st.session_state.publishing = True
                 
                 try:
-                    # Generate unique update ID
-                    update_id = f"{int(time.time())}_{st.session_state.new_gold}_{st.session_state.new_silver}"
-                    
                     # CRITICAL: Get FRESH live rates before saving
                     fresh_rates = get_live_rates()
+                    
+                    # Calculate with FRESH data
+                    fresh_gold_oz = float(fresh_rates.get('gold', 2750.0))
+                    fresh_silver_oz = float(fresh_rates.get('silver', 32.0))
+                    fresh_usd = float(fresh_rates.get('usd', 278.0))
+                    fresh_aed = float(fresh_rates.get('aed', 3.67))
+                    
+                    calc_gold = ((fresh_gold_oz / 31.1035) * 11.66 * fresh_usd) + int(st.session_state.new_gold)
+                    calc_silver = ((fresh_silver_oz / 31.1035) * 11.66 * fresh_usd) + int(st.session_state.new_silver)
                     
                     new_settings = {
                         "gold_premium": int(st.session_state.new_gold), 
                         "silver_premium": int(st.session_state.new_silver),
-                        "last_update": int(time.time()),
-                        "update_id": update_id,
-                        "published_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        "last_update": int(time.time())
                     }
-                    
-                    # Calculate accurate prices with FRESH data
-                    fresh_gold_ounce = float(fresh_rates.get('gold', 2750.0))
-                    fresh_silver_ounce = float(fresh_rates.get('silver', 32.0))
-                    fresh_usd = float(fresh_rates.get('usd', 278.0))
-                    
-                    calculated_gold = ((fresh_gold_ounce / 31.1035) * 11.66 * fresh_usd) + int(st.session_state.new_gold)
-                    calculated_silver = ((fresh_silver_ounce / 31.1035) * 11.66 * fresh_usd) + int(st.session_state.new_silver)
                     
                     # Update manual.json
                     try:
@@ -444,7 +422,7 @@ if st.session_state.admin_auth:
                     except Exception:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
-                    # Update History with FRESH calculated values
+                    # Update History
                     try:
                         h_content = repo.get_contents("history.json")
                         history = json.loads(h_content.decoded_content.decode())
@@ -453,10 +431,10 @@ if st.session_state.admin_auth:
                     
                     history.append({
                         "date": fresh_rates.get('full_date', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                        "gold_pk": float(calculated_gold),
-                        "silver_pk": float(calculated_silver),
-                        "gold_ounce": fresh_gold_ounce,
-                        "silver_ounce": fresh_silver_ounce,
+                        "gold_pk": float(calc_gold),
+                        "silver_pk": float(calc_silver),
+                        "gold_ounce": fresh_gold_oz,
+                        "silver_ounce": fresh_silver_oz,
                         "usd": fresh_usd
                     })
                     
@@ -476,69 +454,68 @@ if st.session_state.admin_auth:
                     <div style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0; text-align: center; font-weight: 700;">
                         ✅ PUBLISHED SUCCESSFULLY!<br>
                         <span style="font-size: 0.85rem;">
-                        Gold: Rs {calculated_gold:,.0f} | 
-                        Silver: Rs {calculated_silver:,.0f}<br>
+                        Gold: Rs {calc_gold:,.0f} | 
+                        Silver: Rs {calc_silver:,.0f}<br>
                         All users will update automatically
                         </span>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Clear caches and reload
+                    # Reset publishing flag
+                    st.session_state.publishing = False
                     clear_all_caches()
-                    time.sleep(1)
+                    time.sleep(0.5)
                     st.rerun()
                     
                 except Exception as e:
                     st.session_state.publishing = False
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="error-msg">❌ GitHub not connected or already publishing</div>', unsafe_allow_html=True)
+                st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
     
     # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
-        st.info(f"💡 Current Rates - Gold Ounce: ${gold_ounce:,.2f} | USD/PKR: {usd_rate:.2f}")
+        st.info(f"Gold Ounce: ${gold_ounce:,.2f} | USD/PKR: {usd_rate:.2f} | Premium Gold: Rs {int(gold_premium):,}")
         
         stats_cols = st.columns(3)
         with stats_cols[0]:
-            st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(st.session_state.new_gold):,}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(gold_premium):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[1]:
-            st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;"><div style="font-size: 2rem;">⚪</div><div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Silver Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;"><div style="font-size: 2rem;">⚪</div><div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Silver Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(silver_premium):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[2]:
             st.markdown(f'<div style="background: linear-gradient(135deg, #d4af37 0%, #f4e5c2 100%); color: #1a1a1a; border-radius: 12px; padding: 1.5rem; text-align: center;"><div style="font-size: 2rem;">💵</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">USD/PKR</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {usd_rate:.2f}</div></div>', unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
         # Price Breakdown
-        st.markdown("### Price Calculation Breakdown")
+        st.markdown("### Price Calculation")
         calc_cols = st.columns(2)
         
         with calc_cols[0]:
+            base_gold = ((gold_ounce/31.1035)*11.66*usd_rate)
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #d4af37; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">🟡 Gold Calculation</h4>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Int'l Ounce:</strong> ${gold_ounce:,.2f}</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Per Tola (11.66g):</strong> {(gold_ounce/31.1035)*11.66:,.2f} oz</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>USD Rate:</strong> Rs {usd_rate:.2f}</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Base Price:</strong> Rs {((gold_ounce/31.1035)*11.66*usd_rate):,.0f}</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Premium:</strong> Rs {int(settings.get('gold_premium', 0)):,}</p>
+                <h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">🟡 Gold</h4>
+                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Ounce:</strong> ${gold_ounce:,.2f}</p>
+                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Base:</strong> Rs {base_gold:,.0f}</p>
+                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Premium:</strong> Rs {int(gold_premium):,}</p>
                 <hr style="border: 1px solid #eee;">
-                <p style="margin: 0.3rem 0; color: #d4af37; font-size: 1.1rem; font-weight: bold;"><strong>FINAL: Rs {gold_tola:,.0f}</strong></p>
+                <p style="margin: 0.3rem 0; color: #d4af37; font-size: 1.1rem; font-weight: bold;">FINAL: Rs {gold_tola:,.0f}</p>
                 <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Dubai:</strong> AED {gold_dubai_tola:,.0f}</p>
             </div>
             """, unsafe_allow_html=True)
             
         with calc_cols[1]:
+            base_silver = ((silver_ounce/31.1035)*11.66*usd_rate)
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver Calculation</h4>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Int'l Ounce:</strong> ${silver_ounce:.2f}</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Per Tola (11.66g):</strong> {(silver_ounce/31.1035)*11.66:.2f} oz</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>USD Rate:</strong> Rs {usd_rate:.2f}</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Base Price:</strong> Rs {((silver_ounce/31.1035)*11.66*usd_rate):,.0f}</p>
-                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Premium:</strong> Rs {int(settings.get('silver_premium', 0)):,}</p>
+                <h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver</h4>
+                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Ounce:</strong> ${silver_ounce:.2f}</p>
+                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Base:</strong> Rs {base_silver:,.0f}</p>
+                <p style="margin: 0.3rem 0; color: #555; font-size: 0.9rem;"><strong>Premium:</strong> Rs {int(silver_premium):,}</p>
                 <hr style="border: 1px solid #eee;">
-                <p style="margin: 0.3rem 0; color: #666; font-size: 1.1rem; font-weight: bold;"><strong>FINAL: Rs {silver_tola:,.0f}</strong></p>
+                <p style="margin: 0.3rem 0; color: #666; font-size: 1.1rem; font-weight: bold;">FINAL: Rs {silver_tola:,.0f}</p>
             </div>
             """, unsafe_allow_html=True)
     
