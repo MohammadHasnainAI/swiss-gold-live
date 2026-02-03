@@ -11,7 +11,7 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v44.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v45.0", page_icon="💎", layout="centered")
 
 # 2. AUTO-REFRESH LOGIC
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
@@ -38,13 +38,25 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
-.block-container {padding-top: 4.5rem !important; padding-bottom: 1rem !important; max-width: 700px;}
+
+/* FIXED: REDUCED TOP PADDING TO MOVE HEADER UP */
+.block-container {
+    padding-top: 1rem !important; 
+    padding-bottom: 1rem !important; 
+    max-width: 700px;
+}
+
+/* HIDE STREAMLIT DEFAULT HEADER TO CLEAR SPACE */
+header[data-testid="stHeader"] {
+    background-color: transparent;
+}
 
 /* HEADER DESIGN */
 .header-box {
     text-align:center; 
     padding: 25px 0; 
     margin-bottom:15px; 
+    margin-top: -20px; /* Pulls the box up into the empty space */
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); 
     border-radius: 12px; 
     color: white; 
@@ -53,10 +65,10 @@ st.markdown("""
     flex-direction: column;
     justify-content: center;
 }
-.brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.1; margin-top: 5px;}
+.brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.1; margin-bottom: 5px;}
 .brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.8;}
 
-/* STATS BOX DESIGN (Updated for Time) */
+/* STATS BOX DESIGN */
 .price-card {background:#ffffff; border-radius:16px; padding:15px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.04); border:1px solid #eef0f2; margin-bottom:8px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .sleep-badge {background-color:#eef2f6; color:#555; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
@@ -254,10 +266,11 @@ else:
     silver_tola = 0
 
 # 12. DISPLAY
+# FIXED HEADER STRUCTURE (Title FIRST, then Subtitle)
 st.markdown("""
 <div class="header-box">
-    <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
     <div class="brand-title">Islam Jewellery</div>
+    <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -469,6 +482,7 @@ if st.session_state.admin_auth:
                 st.session_state.publishing = True
                 st.session_state.is_admin_publishing = True
                 try:
+                    # CRITICAL: Get FRESH live rates
                     get_live_rates.clear()
                     fresh = get_live_rates()
                     
@@ -526,7 +540,7 @@ if st.session_state.admin_auth:
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
-
+    
     # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
