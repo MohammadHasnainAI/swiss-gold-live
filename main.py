@@ -106,7 +106,6 @@ def get_live_rates():
     current_hour = now_khi.hour
     
     # Smart Logic: Active hours 07:00 to 23:59
-    # Hours 7, 8, ... 23.
     is_active_hours = 7 <= current_hour <= 23
     
     debug_logs = []
