@@ -11,9 +11,9 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v43.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v44.0", page_icon="💎", layout="centered")
 
-# 2. AUTO-REFRESH LOGIC (20s Interval)
+# 2. AUTO-REFRESH LOGIC
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
 
 # 3. SESSION STATE
@@ -39,24 +39,43 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
 .block-container {padding-top: 4.5rem !important; padding-bottom: 1rem !important; max-width: 700px;}
-.header-box {text-align:center; padding: 20px 0; margin-bottom:15px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);}
-.brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.2; margin-bottom: 8px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);}
-.brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.9;}
+
+/* HEADER DESIGN */
+.header-box {
+    text-align:center; 
+    padding: 25px 0; 
+    margin-bottom:15px; 
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); 
+    border-radius: 12px; 
+    color: white; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.1; margin-top: 5px;}
+.brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.8;}
+
+/* STATS BOX DESIGN (Updated for Time) */
 .price-card {background:#ffffff; border-radius:16px; padding:15px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.04); border:1px solid #eef0f2; margin-bottom:8px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .sleep-badge {background-color:#eef2f6; color:#555; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .error-badge {background-color:#f8d7da; color:#721c24; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .big-price {font-size:2.6rem; font-weight:800; color:#222; line-height:1; margin:4px 0; letter-spacing:-1px;}
-.price-label {font-size:0.85rem; color:#666; font-weight:500;}
+.price-label {font-size:0.85rem; color:#666; font-weight:500; margin-bottom: 10px;}
+
 .stats-container {display:flex; gap:6px; margin-top:10px; justify-content:center;}
-.stat-box {background:#f1f3f5; border-radius:8px; padding:8px; text-align:center; border:1px solid #ebebeb; flex: 1;}
-.stat-value {font-size:0.9rem; font-weight:700; color:#d4af37;}
-.stat-label {font-size:0.55rem; color:#888; font-weight:600; text-transform:uppercase;}
+.stat-box {background:#f1f3f5; border-radius:8px; padding:8px; text-align:center; border:1px solid #ebebeb; flex: 1; display: flex; flex-direction: column; justify-content: center;}
+.stat-value {font-size:0.9rem; font-weight:700; color:#d4af37; line-height: 1.2;}
+.stat-label {font-size:0.55rem; color:#444; font-weight:700; text-transform:uppercase; margin-top: 2px;}
+.stat-time {font-size:0.5rem; color:#999; font-weight:500; margin-top: 2px;}
+
 .btn-grid {display: flex; gap: 8px; margin-top: 12px; justify-content: center;}
 .contact-btn {flex: 1; padding: 12px; border-radius: 10px; text-align: center; text-decoration: none; font-weight: 600; font-size: 0.85rem; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: white !important;}
 .btn-call {background-color:#222;}
 .btn-whatsapp {background-color:#25D366;}
 .footer {background:#f1f3f5; padding:10px; border-radius: 10px; text-align:center; font-size:0.7rem; color:#666; margin-top:15px;}
+
 /* Admin Styles */
 .login-card {background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 2rem auto; text-align: center; border-top: 4px solid #d4af37;}
 .admin-title {font-size: 1.8rem; font-weight: 800; color: #d4af37; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 2px;}
@@ -105,11 +124,7 @@ def get_live_rates():
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # ---------------------------------------------------------
-    # PART 1: GOLD & SILVER (PRIORITY: YAHOO -> TWELVE -> GP)
-    # ---------------------------------------------------------
-    
-    # Priority 1: Yahoo Finance (Unlimited)
+    # 1. MARKET DATA (Yahoo First)
     market_success = False
     try:
         g_tick = yf.Ticker("GC=F") 
@@ -127,7 +142,7 @@ def get_live_rates():
     except Exception as e:
         debug_logs.append(f"Yahoo Market Error: {str(e)}")
 
-    # Priority 2: TwelveData (Backup - Limited)
+    # 2. MARKET BACKUP (TwelveData)
     if not market_success:
         try:
             if "TWELVE_DATA_KEY" in st.secrets:
@@ -139,14 +154,12 @@ def get_live_rates():
                     data = gold_res.json()
                     if 'price' in data:
                         gold_price = float(data['price'])
-                        
-                        # Get Silver if Gold succeeded
+                        # Get Silver
                         url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
                         slv_res = requests.get(url_slv, timeout=5)
                         if slv_res.status_code == 200:
                             s_data = slv_res.json()
                             silver_price = float(s_data.get('price', 0))
-                        
                         market_success = True
                         debug_logs.append("Used Backup: TwelveData")
                     else:
@@ -154,29 +167,7 @@ def get_live_rates():
         except Exception as e:
             debug_logs.append(f"TD Error: {str(e)}")
 
-    # Priority 3: GoldPrice.org (Last Resort)
-    if not market_success:
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            gp_url = "https://data-asg.goldprice.org/dbXRates/USD"
-            gp_res = requests.get(gp_url, headers=headers, timeout=5)
-            if gp_res.status_code == 200:
-                gp_data = gp_res.json()
-                if 'items' in gp_data and len(gp_data['items']) > 0:
-                    item = gp_data['items'][0]
-                    gold_price = float(item.get('xauPrice', 0))
-                    silver_price = float(item.get('xagPrice', 0))
-                    if gold_price > 0:
-                        market_success = True
-                        debug_logs.append("Used Backup: GoldPrice.org")
-        except Exception as e:
-            debug_logs.append(f"GoldPrice Error: {str(e)}")
-
-    # ---------------------------------------------------------
-    # PART 2: CURRENCY (PRIORITY: YAHOO -> EXCHANGERATE)
-    # ---------------------------------------------------------
-    
-    # Priority 1: Yahoo Finance (Unlimited)
+    # 3. CURRENCY (Yahoo First)
     currency_success = False
     try:
         c_tick = yf.Ticker("PKR=X")
@@ -188,7 +179,7 @@ def get_live_rates():
     except Exception as e:
         debug_logs.append(f"Yahoo Currency Error: {str(e)}")
 
-    # Priority 2: ExchangeRate-API (Backup - Limited)
+    # 4. CURRENCY BACKUP (ExchangeRate-API)
     if not currency_success:
         try:
             if "CURR_KEY" in st.secrets:
@@ -199,7 +190,6 @@ def get_live_rates():
                     c_data = curr_res.json()
                     usd_rate = float(c_data.get('conversion_rates', {}).get('PKR', 0))
                     aed_rate = float(c_data.get('conversion_rates', {}).get('AED', 0))
-                    currency_success = True
                     debug_logs.append("Used Backup: ExchangeRate-API")
         except Exception as e:
             debug_logs.append(f"Currency API Error: {str(e)}")
@@ -212,7 +202,7 @@ def get_live_rates():
         "active_mode": is_active_hours
     }
 
-# 9. LOAD & THROTTLE
+# 9. LOAD DATA
 try:
     current_ts = time.time()
     tz_khi = pytz.timezone("Asia/Karachi")
@@ -266,13 +256,14 @@ else:
 # 12. DISPLAY
 st.markdown("""
 <div class="header-box">
-    <div class="brand-title">Islam Jewellery</div>
     <div class="brand-subtitle">Sarafa Bazar • Premium Gold</div>
+    <div class="brand-title">Islam Jewellery</div>
 </div>
 """, unsafe_allow_html=True)
 
 is_active = live_data.get('active_mode', True)
 status_badge = '<div class="live-badge">● GOLD LIVE</div>' if is_active else '<div class="sleep-badge">☾ NIGHT MODE</div>'
+update_time = live_data.get('time')
 
 # Gold Card
 if gold_tola > 0:
@@ -282,9 +273,21 @@ if gold_tola > 0:
         <div class="big-price">Rs {gold_tola:,.0f}</div>
         <div class="price-label">24K Gold Per Tola</div>
         <div class="stats-container">
-            <div class="stat-box"><div class="stat-value">${gold_ounce:,.2f}</div><div class="stat-label">Ounce USD</div></div>
-            <div class="stat-box"><div class="stat-value">Rs {usd_rate:.2f}</div><div class="stat-label">USD Rate</div></div>
-            <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai/Tola</div></div>
+            <div class="stat-box">
+                <div class="stat-value">${gold_ounce:,.2f}</div>
+                <div class="stat-label">Ounce USD</div>
+                <div class="stat-time">🕒 {update_time}</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">Rs {usd_rate:.2f}</div>
+                <div class="stat-label">USD Rate</div>
+                <div class="stat-time">🕒 {update_time}</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">AED {gold_dubai_tola:,.0f}</div>
+                <div class="stat-label">Dubai/Tola</div>
+                <div class="stat-time">🕒 {update_time}</div>
+            </div>
         </div>
         <div style="font-size:0.6rem; color:#aaa; margin-top:8px;">Data as of: <b>{live_data.get('full_date')}</b></div>
     </div>
@@ -307,8 +310,15 @@ if silver_tola > 0:
         <div class="big-price">Rs {silver_tola:,.0f}</div>
         <div class="price-label">24K Silver Per Tola</div>
         <div class="stats-container">
-            <div class="stat-box"><div class="stat-value">${silver_ounce:.2f}</div><div class="stat-label">Ounce USD</div></div>
-            <div class="stat-box"><div class="stat-value">{live_data.get('time')}</div><div class="stat-label">Time</div></div>
+            <div class="stat-box">
+                <div class="stat-value">${silver_ounce:.2f}</div>
+                <div class="stat-label">Ounce USD</div>
+                <div class="stat-time">🕒 {update_time}</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">{live_data.get('time')}</div>
+                <div class="stat-label">Time</div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -374,7 +384,7 @@ if st.session_state.admin_auth:
 
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
-    # TAB 1: Update
+    # TAB 1: Update Rates
     with tabs[0]:
         st.markdown("### Select Metal")
         btn_cols = st.columns(2)
@@ -510,13 +520,14 @@ if st.session_state.admin_auth:
                         st.session_state.last_seen_update = new_settings["last_update"]
                         clear_all_caches()
                         st.rerun()
+                        
                 except Exception as e:
                     st.session_state.publishing = False
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
 
-    # TAB 2: Stats
+    # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
         st.info(f"Gold Ounce: ${gold_ounce:,.2f} | USD/PKR: {usd_rate:.2f} | Premium Gold: Rs {int(gold_premium):,}")
@@ -561,37 +572,79 @@ if st.session_state.admin_auth:
                 <p style="margin: 0.3rem 0; color: #666; font-size: 1.1rem; font-weight: bold;">FINAL: Rs {silver_tola:,.0f}</p>
             </div>
             """, unsafe_allow_html=True)
-
-    # TAB 3: History
+    
+    # TAB 3: HISTORY
     with tabs[2]:
-        if st.button("🗑️ Reset History"):
-            st.session_state.confirm_reset_history = True
+        st.markdown("### 📜 Rate History Log")
+        
+        header_cols = st.columns([3, 1])
+        with header_cols[0]:
+            st.caption(f"Last 60 records")
+        with header_cols[1]:
+            if st.button("🗑️ Reset History", type="secondary", key="reset_hist_btn"):
+                st.session_state.confirm_reset_history = True
         
         if st.session_state.confirm_reset_history:
-            if st.button("✅ Confirm"):
-                if repo:
-                    try:
-                        hc = repo.get_contents("history.json")
-                        repo.update_file(hc.path, "Reset", json.dumps([]), hc.sha)
-                        st.success("Reset!")
-                        st.session_state.confirm_reset_history = False
-                    except:
-                        st.error("Error")
-            if st.button("❌ Cancel"):
-                st.session_state.confirm_reset_history = False
-
+            st.markdown('<div class="reset-container">', unsafe_allow_html=True)
+            st.markdown("⚠️ **Warning:** This will permanently delete all history records!")
+            conf_cols = st.columns(2)
+            with conf_cols[0]:
+                if st.button("✅ Yes, Delete All", type="primary", key="confirm_hist_yes", use_container_width=True):
+                    if repo:
+                        try:
+                            h_content = repo.get_contents("history.json")
+                            repo.update_file(h_content.path, "Reset history", json.dumps([]), h_content.sha)
+                            st.session_state.confirm_reset_history = False
+                            st.success("✅ History cleared!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                    else:
+                        st.error("GitHub not connected")
+            with conf_cols[1]:
+                if st.button("❌ Cancel", key="cancel_hist", use_container_width=True):
+                    st.session_state.confirm_reset_history = False
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+        
         try:
             if repo:
-                hc = repo.get_contents("history.json")
-                data = json.loads(hc.decoded_content.decode())
-                if isinstance(data, list) and len(data) > 0:
-                    st.dataframe(data)
+                contents = repo.get_contents("history.json")
+                history_data = json.loads(contents.decoded_content.decode())
+                
+                if history_data and len(history_data) > 0:
+                    df = pd.DataFrame(history_data)
+                    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
+                    
+                    column_mapping = {
+                        'date': 'Date/Time',
+                        'gold_pk': 'Gold PKR',
+                        'silver_pk': 'Silver PKR',
+                        'gold_ounce': 'Gold Oz ($)',
+                        'silver_ounce': 'Silver Oz ($)',
+                        'usd': 'USD Rate'
+                    }
+                    
+                    df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+                    expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
+                    for col in expected_cols:
+                        if col not in df.columns:
+                            df[col] = 0
+                    
+                    df = df[expected_cols]
+                    
+                    st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
+                    
+                    csv = df.to_csv(index=False).encode('utf-8')
+                    st.download_button("📥 Export CSV", csv, f"history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
                 else:
-                    st.info("No history")
-        except:
-            st.info("Empty")
-
-    # TAB 4: Charts
+                    st.info("📭 No history records found.")
+            else:
+                st.error("❌ GitHub not connected")
+        except Exception as e:
+            st.info(f"📭 History empty or error: {str(e)}")
+    
+    # TAB 4: CHARTS
     with tabs[3]:
         st.markdown("### 📈 Price Trends")
         
