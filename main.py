@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v31.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v33.0", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -90,14 +90,13 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - TRIPLE LAYER (TD -> GoldPrice.org -> Yahoo)
+# 6. DATA ENGINE - UNFILTERED API MODE
 @st.cache_data(ttl=300, show_spinner=False)
 def get_live_rates():
     """
-    TRIPLE LAYER FETCHING STRATEGY
-    1. TwelveData (Best, but has limits)
-    2. GoldPrice.org (Free, Very Accurate)
-    3. Yahoo Finance (Backup, can be glitchy)
+    UNFILTERED MODE:
+    - Returns EXACTLY what the API sends.
+    - No manual limits.
     """
     debug_logs = []
     gold_price = 0.0
@@ -125,7 +124,6 @@ def get_live_rates():
             else:
                 debug_logs.append(f"TD Gold HTTP: {gold_res.status_code}")
                 
-            # If gold worked, try silver
             if td_success:
                 url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
                 slv_res = requests.get(url_slv, timeout=5)
@@ -136,13 +134,12 @@ def get_live_rates():
         debug_logs.append(f"TD Error: {str(e)}")
         td_success = False
 
-    # Attempt 2: GoldPrice.org (Best Free Backup)
+    # Attempt 2: GoldPrice.org (Backup)
     gp_success = False
     if not td_success:
         try:
             debug_logs.append("Trying GoldPrice.org...")
             headers = {'User-Agent': 'Mozilla/5.0'}
-            # This is a hidden reliable API endpoint
             gp_url = "https://data-asg.goldprice.org/dbXRates/USD"
             gp_res = requests.get(gp_url, headers=headers, timeout=5)
             
@@ -159,11 +156,10 @@ def get_live_rates():
         except Exception as e:
             debug_logs.append(f"GoldPrice.org Error: {str(e)}")
 
-    # Attempt 3: Yahoo Finance (Last Resort - Futures)
+    # Attempt 3: Yahoo Finance (Last Resort - NO FILTER)
     if not td_success and not gp_success:
         try:
             debug_logs.append("Trying Yahoo Futures...")
-            # Use Futures (GC=F) instead of XAU-USD (Currency) as it's more stable
             g_tick = yf.Ticker("GC=F") 
             g_hist = g_tick.history(period="1d")
             if not g_hist.empty:
@@ -233,7 +229,7 @@ if current_update_time > st.session_state.last_seen_update:
         clear_all_caches()
         st.rerun()
 
-# 10. CALCULATIONS (Strict - Returns 0 if data missing)
+# 10. CALCULATIONS (Raw data only)
 gold_ounce = float(live_data.get('gold', 0))
 silver_ounce = float(live_data.get('silver', 0))
 usd_rate = float(live_data.get('usd', 0))
@@ -242,7 +238,7 @@ aed_rate = float(live_data.get('aed', 0))
 gold_premium = float(settings.get("gold_premium", 0))
 silver_premium = float(settings.get("silver_premium", 0))
 
-# Only calculate if data is valid (> 0)
+# Only calculate if data exists
 if gold_ounce > 0 and usd_rate > 0:
     gold_tola = ((gold_ounce / 31.1035) * 11.66 * usd_rate) + gold_premium
     gold_dubai_tola = (gold_ounce / 31.1035) * 11.66 * aed_rate
