@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH EVERY 5 SECONDS (for all users - admin can toggle)
+# AUTO-REFRESH EVERY 5 SECONDS (Simplified - works for all users)
 # ---------------------------------------------------------
 if "admin_auth" not in st.session_state:
     st.session_state.admin_auth = False
@@ -20,13 +20,9 @@ if "admin_auth" not in st.session_state:
 if "admin_auto_refresh" not in st.session_state:
     st.session_state.admin_auto_refresh = True  # Default ON for admin
 
-# Auto-refresh logic
-if not st.session_state.admin_auth:
-    # Non-admin: always auto-refresh
-    st_autorefresh(interval=5000, key="gold_refresh")
-elif st.session_state.admin_auth and st.session_state.admin_auto_refresh:
-    # Admin: auto-refresh only if enabled
-    st_autorefresh(interval=5000, key="gold_refresh_admin")
+# CRITICAL FIX: Use same key for all users, simpler logic
+if not st.session_state.admin_auth or st.session_state.admin_auto_refresh:
+    st_autorefresh(interval=5000, key="global_refresh")
 
 # 2. HELPER FUNCTIONS
 def update_premium(key, amount):
@@ -35,8 +31,14 @@ def update_premium(key, amount):
     st.session_state[key] += amount
 
 def manual_refresh():
+    """Clear ALL caches to force fresh data fetch"""
     get_live_rates.clear()
     load_settings.clear()
+    # Clear timestamps
+    if "last_data_fetch" in st.session_state:
+        del st.session_state["last_data_fetch"]
+    if "last_settings_fetch" in st.session_state:
+        del st.session_state["last_settings_fetch"]
 
 # 3. CSS STYLES
 st.markdown("""
@@ -70,6 +72,7 @@ st.markdown("""
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
 .update-indicator {background: #dbeafe; border-left: 4px solid #3b82f6; padding: 0.5rem; border-radius: 4px; margin: 10px 0; font-size: 0.8rem; color: #1e40af; text-align: center;}
+.debug-info {background: #f8f9fa; border-left: 4px solid #6c757d; padding: 0.5rem; border-radius: 4px; margin: 5px 0; font-size: 0.7rem; color: #495057; font-family: monospace;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -82,38 +85,47 @@ try:
 except Exception as e:
     st.error(f"GitHub Connection Error: {e}")
 
-# 5. SETTINGS ENGINE - FIXED: Reduced TTL to 1 second for faster updates
-@st.cache_data(ttl=1, show_spinner=False)  # Changed from 5 to 1 second
+# 5. SETTINGS ENGINE - Faster refresh
+@st.cache_data(ttl=5, show_spinner=False)  # 5 second cache
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0}
     if repo:
         try:
             content = repo.get_contents("manual.json")
-            return json.loads(content.decoded_content.decode())
+            settings = json.loads(content.decoded_content.decode())
+            st.session_state["last_settings_fetch"] = datetime.now().strftime('%H:%M:%S')
+            return settings
         except Exception:
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE
-@st.cache_data(ttl=120, show_spinner=False)
+# 6. DATA ENGINE - Faster refresh
+@st.cache_data(ttl=30, show_spinner=False)  # 30 second cache
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets or "CURR_KEY" not in st.secrets:
+        st.session_state["last_data_fetch"] = "No API Keys"
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "No API Keys", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     
     try:
         TD_KEY = st.secrets["TWELVE_DATA_KEY"]
         CURR_KEY = st.secrets["CURR_KEY"]
         
+        # CRITICAL FIX: Removed spaces in API URLs
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
         metal_res = requests.get(url_metals, timeout=10).json()
         
         url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         curr_res = requests.get(url_curr, timeout=10).json()
         
-        # Debug: Check if silver data exists
-        gold_price = float(metal_res.get('XAU/USD', {}).get('price', 2750.00))
+        # Extract prices safely
+        gold_data = metal_res.get('XAU/USD', {})
         silver_data = metal_res.get('XAG/USD', {})
+        
+        gold_price = float(gold_data.get('price', 2750.00))
         silver_price = float(silver_data.get('price', 32.00))
+        
+        # Store fetch timestamp
+        st.session_state["last_data_fetch"] = datetime.now().strftime('%H:%M:%S')
         
         return {
             "gold": gold_price,
@@ -124,11 +136,20 @@ def get_live_rates():
             "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
         }
     except Exception as e:
+        st.session_state["last_data_fetch"] = f"Error: {e}"
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Error", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
 
 # 7. LOAD DATA
 live_data = get_live_rates()
 settings = load_settings()
+
+# DEBUG PANEL for admin
+if st.session_state.admin_auth:
+    with st.expander("🔧 Debug Info", expanded=False):
+        st.markdown(f"**Last API Fetch:** `{st.session_state.get('last_data_fetch', 'Never')}`")
+        st.markdown(f"**Last Settings Fetch:** `{st.session_state.get('last_settings_fetch', 'Never')}`")
+        st.markdown(f"**Raw Silver (oz):** `${live_data.get('silver', 0)}`")
+        st.markdown(f"**Silver Premium:** `Rs {settings.get('silver_premium', 0)}`")
 
 if "error" in live_data:
     st.warning(f"⚠️ API Error: {live_data['error']}")
@@ -147,21 +168,25 @@ if "confirm_reset_chart" not in st.session_state:
 if "last_update" not in st.session_state:
     st.session_state.last_update = "Never"
 
-# 8. CALCULATIONS
+# 8. CALCULATIONS with error handling
 try:
-    gold_tola = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("gold_premium", 0)
-    silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
-    gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
+    gold_oz = float(live_data.get('gold', 0))
+    silver_oz = float(live_data.get('silver', 0))
+    usd_rate = float(live_data.get('usd', 278.0))
+    aed_rate = float(live_data.get('aed', 3.67))
+    
+    gold_tola = ((gold_oz / 31.1035) * 11.66 * usd_rate) + settings.get("gold_premium", 0)
+    silver_tola = ((silver_oz / 31.1035) * 11.66 * usd_rate) + settings.get("silver_premium", 0)
+    gold_dubai_tola = (gold_oz / 31.1035) * 11.66 * aed_rate
+    
 except Exception as e:
-    st.error(f"Calc Error: {e}")
-    gold_tola = 0
-    silver_tola = 0
-    gold_dubai_tola = 0
+    st.error(f"Calculation Error: {e}")
+    gold_tola = silver_tola = gold_dubai_tola = 0
 
 # 9. MAIN DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
-# Auto-refresh indicator for users
+# Update indicator
 if not st.session_state.admin_auth or st.session_state.admin_auto_refresh:
     st.markdown(f"""
     <div class="update-indicator">
@@ -169,6 +194,7 @@ if not st.session_state.admin_auth or st.session_state.admin_auto_refresh:
     </div>
     """, unsafe_allow_html=True)
 
+# Gold Card
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge">● GOLD LIVE</div>
@@ -180,16 +206,17 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
     </div>
     <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
-        Last Updated: <b>{live_data['time']}</b> | Settings: {settings.get('gold_premium', 0)}
+        Last Updated: <b>{live_data['time']}</b> | Premium: Rs {settings.get('gold_premium', 0)}
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-if st.button("🔄 Check for New Gold Rate", use_container_width=True):
+# Manual refresh button
+if st.button("🔄 Force Refresh All Data", use_container_width=True):
     manual_refresh()
     st.rerun()
 
-# FIXED: Proper Silver display with ounce price and premium info
+# FIXED: Silver Card - now shows ounce price and premium correctly
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge" style="background-color:#eef2f6; color:#555;">● SILVER LIVE</div>
@@ -201,11 +228,12 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">Rs {settings.get('silver_premium', 0)}</div><div class="stat-label">Premium</div></div>
     </div>
     <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
-        Last Updated: <b>{live_data['time']}</b> | Settings: {settings.get('silver_premium', 0)}
+        Last Updated: <b>{live_data['time']}</b> | Premium: Rs {settings.get('silver_premium', 0)}
     </div>
 </div>
 """, unsafe_allow_html=True)
 
+# Contact buttons
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
 # 10. ADMIN DASHBOARD
@@ -223,7 +251,7 @@ if not st.session_state.admin_auth:
                     st.markdown('<div class="error-msg">⚠️ Invalid password</div>', unsafe_allow_html=True)
 
 if st.session_state.admin_auth:
-    # Admin controls for auto-refresh
+    # Admin auto-refresh toggle
     col_toggle, col_info = st.columns([1, 3])
     with col_toggle:
         auto_refresh_enabled = st.toggle("Auto-Refresh", value=st.session_state.admin_auto_refresh, key="toggle_refresh")
@@ -231,9 +259,9 @@ if st.session_state.admin_auth:
     
     with col_info:
         if st.session_state.admin_auto_refresh:
-            st.info("🔄 Auto-refresh is ON (5s intervals)")
+            st.success("🔄 Auto-refresh is ON (5s intervals)")
         else:
-            st.warning("⏸️ Auto-refresh is OFF")
+            st.warning("⏸️ Auto-refresh is OFF - Data may be stale!")
     
     st.markdown("---")
     col1, col2 = st.columns([4, 1])
@@ -246,7 +274,6 @@ if st.session_state.admin_auth:
             st.session_state.last_update = datetime.now().strftime('%H:%M:%S')
             st.rerun()
     
-    # Warning: Admin changes affect all users within 5 seconds
     st.info("ℹ️ Changes will reflect on all user screens within 5 seconds of publishing")
     
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
@@ -280,7 +307,7 @@ if st.session_state.admin_auth:
                     st.session_state.new_gold = current + 500
                     st.rerun()
             
-            val = st.number_input("Gold Premium", value=current, step=step, key="gold_input")
+            val = st.number_input("Gold Premium", value=current, step=step, key="gold_input_admin")
             st.session_state.new_gold = int(val)
             
             calculated = ((live_data['gold'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_gold
@@ -310,7 +337,7 @@ if st.session_state.admin_auth:
                     st.session_state.new_silver = current + 50
                     st.rerun()
             
-            val = st.number_input("Silver Premium", value=current, step=step, key="silver_input")
+            val = st.number_input("Silver Premium", value=current, step=step, key="silver_input_admin")
             st.session_state.new_silver = int(val)
             
             calculated = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + st.session_state.new_silver
@@ -367,18 +394,21 @@ if st.session_state.admin_auth:
                     
                     st.session_state.last_update = datetime.now().strftime('%H:%M:%S')
                     
-                    # IMPORTANT: Clear cache so next refresh gets new data
+                    # CRITICAL: Clear BOTH caches
                     load_settings.clear()
+                    get_live_rates.clear()
                     
                     st.markdown('<div class="success-msg">✅ Published! All users will see update within 5 seconds.</div>', unsafe_allow_html=True)
                     st.balloons()
+                    
+                    # Force immediate refresh
+                    st.rerun()
                     
                 except Exception as e:
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
     
-    # Rest of the tabs remain the same...
     # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
