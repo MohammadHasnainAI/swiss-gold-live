@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v30.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v31.0", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -90,12 +90,14 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - HYBRID (TwelveData + Yahoo Fallback)
-@st.cache_data(ttl=300, show_spinner=False)  # Increased cache to 5 mins to save credits
+# 6. DATA ENGINE - TRIPLE LAYER (TD -> GoldPrice.org -> Yahoo)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_live_rates():
     """
-    Get live rates with strict error checking.
-    Priority: TwelveData -> Yahoo Finance (Fallback)
+    TRIPLE LAYER FETCHING STRATEGY
+    1. TwelveData (Best, but has limits)
+    2. GoldPrice.org (Free, Very Accurate)
+    3. Yahoo Finance (Backup, can be glitchy)
     """
     debug_logs = []
     gold_price = 0.0
@@ -103,7 +105,8 @@ def get_live_rates():
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # 1. GOLD STRATEGY
+    # --- PHASE 1: GOLD & SILVER ---
+    
     # Attempt 1: TwelveData
     td_success = False
     try:
@@ -118,50 +121,63 @@ def get_live_rates():
                     gold_price = float(data['price'])
                     td_success = True
                 else:
-                    debug_logs.append(f"TD Gold Limit/Error: {data.get('message', 'Unknown')}")
+                    debug_logs.append(f"TD Gold Limit: {data.get('message', 'Limit reached')}")
             else:
-                debug_logs.append(f"TD Gold HTTP Error: {gold_res.status_code}")
+                debug_logs.append(f"TD Gold HTTP: {gold_res.status_code}")
+                
+            # If gold worked, try silver
+            if td_success:
+                url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
+                slv_res = requests.get(url_slv, timeout=5)
+                if slv_res.status_code == 200:
+                    s_data = slv_res.json()
+                    silver_price = float(s_data.get('price', 0))
     except Exception as e:
-        debug_logs.append(f"TD Gold Ex: {str(e)}")
+        debug_logs.append(f"TD Error: {str(e)}")
+        td_success = False
 
-    # Attempt 2: Yahoo Finance (Unlimited Fallback)
+    # Attempt 2: GoldPrice.org (Best Free Backup)
+    gp_success = False
     if not td_success:
         try:
-            debug_logs.append("Switching to Yahoo Gold...")
-            gold_ticker = yf.Ticker("XAU-USD")
-            # Try fetching standard day data
-            g_data = gold_ticker.history(period="1d", interval="1m")
-            if not g_data.empty:
-                gold_price = float(g_data['Close'].iloc[-1])
-            else:
-                # Backup standard scrape
-                gold_ticker = yf.Ticker("GC=F") # Gold Futures
-                g_data = gold_ticker.history(period="1d", interval="5m")
-                if not g_data.empty:
-                    gold_price = float(g_data['Close'].iloc[-1])
-                else:
-                    debug_logs.append("Yahoo Gold Failed")
+            debug_logs.append("Trying GoldPrice.org...")
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            # This is a hidden reliable API endpoint
+            gp_url = "https://data-asg.goldprice.org/dbXRates/USD"
+            gp_res = requests.get(gp_url, headers=headers, timeout=5)
+            
+            if gp_res.status_code == 200:
+                gp_data = gp_res.json()
+                if 'items' in gp_data and len(gp_data['items']) > 0:
+                    item = gp_data['items'][0]
+                    gold_price = float(item.get('xauPrice', 0))
+                    silver_price = float(item.get('xagPrice', 0))
+                    if gold_price > 0:
+                        gp_success = True
+                        debug_logs.append("Success: Used GoldPrice.org")
+            
         except Exception as e:
-            debug_logs.append(f"Yahoo Gold Ex: {str(e)}")
+            debug_logs.append(f"GoldPrice.org Error: {str(e)}")
 
-    # 2. SILVER STRATEGY
-    try:
-        silver_ticker = yf.Ticker("XAG-USD")
-        silver_data = silver_ticker.history(period="1d", interval="1m")
-        if not silver_data.empty:
-            silver_price = float(silver_data['Close'].iloc[-1])
-        else:
-             # Backup standard scrape
-            silver_ticker = yf.Ticker("SI=F") 
-            silver_data = silver_ticker.history(period="1d", interval="5m")
-            if not silver_data.empty:
-                silver_price = float(silver_data['Close'].iloc[-1])
-            else:
-                debug_logs.append("Yahoo Silver Failed")
-    except Exception as e:
-        debug_logs.append(f"Yahoo Silver Ex: {str(e)}")
+    # Attempt 3: Yahoo Finance (Last Resort - Futures)
+    if not td_success and not gp_success:
+        try:
+            debug_logs.append("Trying Yahoo Futures...")
+            # Use Futures (GC=F) instead of XAU-USD (Currency) as it's more stable
+            g_tick = yf.Ticker("GC=F") 
+            g_hist = g_tick.history(period="1d")
+            if not g_hist.empty:
+                gold_price = float(g_hist['Close'].iloc[-1])
+            
+            s_tick = yf.Ticker("SI=F")
+            s_hist = s_tick.history(period="1d")
+            if not s_hist.empty:
+                silver_price = float(s_hist['Close'].iloc[-1])
+                
+        except Exception as e:
+            debug_logs.append(f"Yahoo Error: {str(e)}")
 
-    # 3. CURRENCY (ExchangeRate-API)
+    # --- PHASE 2: CURRENCY ---
     try:
         if "CURR_KEY" in st.secrets:
             CURR_KEY = st.secrets["CURR_KEY"]
@@ -320,8 +336,12 @@ if st.session_state.admin_auth:
     with st.expander("🛠️ Connection Status (Debug)", expanded=True):
         if live_data.get("debug"):
             for log in live_data["debug"]:
-                st.error(f"❌ {log}")
-            st.warning("⚠️ If you see errors above, the prices shown to users are 0/Offline.")
+                if "TD Gold Limit" in log:
+                    st.warning(f"⚠️ {log}")
+                elif "Success" in log:
+                    st.success(f"✅ {log}")
+                else:
+                    st.error(f"❌ {log}")
         else:
             st.success("✅ All APIs Connected Successfully")
     
