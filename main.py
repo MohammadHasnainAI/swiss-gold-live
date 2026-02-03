@@ -13,11 +13,12 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Islam Jewellery Pro", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH (Runs for EVERYONE - Admin & Public)
+# AUTO-REFRESH ENGINE (Runs first to guarantee updates)
 # ---------------------------------------------------------
+# Refreshes every 5 seconds for everyone
 st_autorefresh(interval=5000, key="global_refresh")
 
-# 2. CSS STYLING (Ultra Compact)
+# 2. CSS STYLING
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
@@ -44,13 +45,12 @@ st.markdown("""
 .btn-call {background-color:#222;}
 .btn-whatsapp {background-color:#25D366;}
 
-/* Admin CSS */
 .control-box {background: #ffffff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 15px; margin-bottom: 15px;}
 .closed-card {background:#ffffff; border-radius:16px; padding:20px; text-align:center; box-shadow:0 4px 6px rgba(220,38,38,0.05); border:2px solid #fee2e2; margin-bottom:8px;}
 </style>
 """, unsafe_allow_html=True)
 
-# 3. GITHUB CONNECTION
+# 3. GITHUB CONNECTION & HELPER FUNCTION
 repo = None 
 try:
     if "GIT_TOKEN" in st.secrets:
@@ -59,7 +59,20 @@ try:
 except Exception as e:
     st.error(f"GitHub Error: {e}")
 
-# 4. DATA ENGINE (Cached 2 Mins)
+# --- THE FIX: ROBUST SAVE FUNCTION ---
+def save_to_github(filename, data, message="Update"):
+    """Safely saves data to GitHub handling the SHA error automatically."""
+    if not repo: return False
+    try:
+        # Try to get existing file to get its SHA
+        contents = repo.get_contents(filename)
+        repo.update_file(contents.path, message, json.dumps(data), contents.sha)
+    except:
+        # If file doesn't exist, create it
+        repo.create_file(filename, "Init", json.dumps(data))
+    return True
+
+# 4. DATA ENGINE
 @st.cache_data(ttl=120, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets:
@@ -67,6 +80,7 @@ def get_live_rates():
     try:
         url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={st.secrets['TWELVE_DATA_KEY']}"
         metal_res = requests.get(url_metals, timeout=5).json()
+        
         url_curr = f"https://v6.exchangerate-api.com/v6/{st.secrets['CURR_KEY']}/latest/USD"
         curr_res = requests.get(url_curr, timeout=5).json()
         
@@ -84,7 +98,7 @@ def get_live_rates():
     except:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Offline"}
 
-# 5. SETTINGS ENGINE (Cached 1 Sec for Fast Updates)
+# 5. SETTINGS ENGINE
 @st.cache_data(ttl=1, show_spinner=False)
 def get_settings():
     default = {"gold_premium": 0, "silver_premium": 0, "gold_market": "OPEN", "silver_market": "OPEN"}
@@ -222,46 +236,34 @@ if st.session_state.admin_auth:
         # --- THE FIX FOR SAVE ERROR ---
         if st.button("🚀 SAVE CHANGES", type="primary", use_container_width=True):
             if repo:
+                # 1. Update Settings
                 new_data = {
                     "gold_premium": st.session_state.new_gold,
                     "silver_premium": st.session_state.new_silver,
                     "gold_market": st.session_state.gold_market_status,
                     "silver_market": st.session_state.silver_market_status
                 }
+                save_to_github("manual.json", new_data, "Update Settings")
                 
-                # 1. Update Settings with FRESH SHA
+                # 2. Update History
                 try:
-                    file = repo.get_contents("manual.json")
-                    repo.update_file(file.path, "Update", json.dumps(new_data), file.sha)
+                    # Fetch existing history to append
+                    contents = repo.get_contents("history.json")
+                    history_data = json.loads(contents.decoded_content.decode())
                 except:
-                    repo.create_file("manual.json", "Init", json.dumps(new_data))
+                    history_data = [] # Start fresh if fails
                 
-                # 2. Update History with FRESH SHA
-                try:
-                    hist_file = repo.get_contents("history.json")
-                    hist_data = json.loads(hist_file.decoded_content.decode())
-                    
-                    hist_data.append({
-                        "date": live_data['full_date'],
-                        "gold_pk": gold_tola,
-                        "silver_pk": silver_tola,
-                        "gold_ounce": live_data['gold'],
-                        "silver_ounce": live_data['silver'],
-                        "usd": live_data['usd']
-                    })
-                    if len(hist_data) > 60: hist_data = hist_data[-60:]
-                    
-                    repo.update_file(hist_file.path, "Log", json.dumps(hist_data), hist_file.sha)
-                except:
-                    hist_data = [{
-                        "date": live_data['full_date'],
-                        "gold_pk": gold_tola,
-                        "silver_pk": silver_tola,
-                        "gold_ounce": live_data['gold'],
-                        "silver_ounce": live_data['silver'],
-                        "usd": live_data['usd']
-                    }]
-                    repo.create_file("history.json", "Init", json.dumps(hist_data))
+                history_data.append({
+                    "date": live_data['full_date'],
+                    "gold_pk": gold_tola,
+                    "silver_pk": silver_tola,
+                    "gold_ounce": live_data['gold'],
+                    "silver_ounce": live_data['silver'],
+                    "usd": live_data['usd']
+                })
+                if len(history_data) > 60: history_data = history_data[-60:]
+                
+                save_to_github("history.json", history_data, "Log History")
                 
                 get_settings.clear()
                 st.success("✅ Saved! Updates visible in ~5 seconds.")
@@ -270,20 +272,15 @@ if st.session_state.admin_auth:
 
     with tabs[1]:
         if st.button("Clear History"):
-            if repo:
-                try:
-                    h = repo.get_contents("history.json")
-                    repo.update_file(h.path, "Reset", json.dumps([]), h.sha)
-                    st.rerun()
-                except: pass
+            save_to_github("history.json", [], "Reset History")
+            st.rerun()
         
         try:
             if repo:
-                h = repo.get_contents("history.json")
-                data = json.loads(h.decoded_content.decode())
+                contents = repo.get_contents("history.json")
+                data = json.loads(contents.decoded_content.decode())
                 if data:
                     df = pd.DataFrame(data)
-                    # SAFE DISPLAY FOR SILVER OUNCE ERROR
                     display_df = pd.DataFrame({
                         'Date': df.get('date', 'N/A'),
                         'Gold Rate': df.get('gold_pk', 0).apply(lambda x: f"Rs {x:,.0f}"),
@@ -298,8 +295,8 @@ if st.session_state.admin_auth:
     with tabs[2]:
         try:
             if repo:
-                h = repo.get_contents("history.json")
-                data = json.loads(h.decoded_content.decode())
+                contents = repo.get_contents("history.json")
+                data = json.loads(contents.decoded_content.decode())
                 if len(data) > 1:
                     df = pd.DataFrame(data)
                     df['date'] = pd.to_datetime(df['date'])
