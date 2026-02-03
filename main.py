@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v33.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v34.1", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -29,6 +29,7 @@ st.markdown("""
 .brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.9;}
 .price-card {background:#ffffff; border-radius:16px; padding:15px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.04); border:1px solid #eef0f2; margin-bottom:8px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
+.sleep-badge {background-color:#eef2f6; color:#555; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .error-badge {background-color:#f8d7da; color:#721c24; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .big-price {font-size:2.6rem; font-weight:800; color:#222; line-height:1; margin:4px 0; letter-spacing:-1px;}
 .price-label {font-size:0.85rem; color:#666; font-weight:500;}
@@ -90,15 +91,29 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - UNFILTERED API MODE
-@st.cache_data(ttl=300, show_spinner=False)
+# 6. DATA ENGINE - SMART THROTTLE & HYBRID SOURCES
+@st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
     """
-    UNFILTERED MODE:
-    - Returns EXACTLY what the API sends.
-    - No manual limits.
+    SMART SCHEDULE (PKT TIME):
+    - 11 AM to 10 PM: Fast Updates (Every ~90 sec) - Active Market
+    - 10 PM to 11 AM: Slow Updates (Every ~15 min) - Save Credits
     """
+    
+    # 1. Determine "Smart Cache" Duration
+    tz_khi = pytz.timezone("Asia/Karachi")
+    now_khi = datetime.now(tz_khi)
+    current_hour = now_khi.hour
+    
+    # Smart Logic: Active hours 11:00 to 22:00 (10 PM)
+    is_active_hours = 11 <= current_hour < 22
+    
+    # We use a trick: If it's night time, we might return old data to save hits
+    # But since Streamlit controls cache via TTL, we handle this by logic below
+    
     debug_logs = []
+    
+    # 2. Setup Variables
     gold_price = 0.0
     silver_price = 0.0
     usd_rate = 0.0
@@ -106,7 +121,7 @@ def get_live_rates():
     
     # --- PHASE 1: GOLD & SILVER ---
     
-    # Attempt 1: TwelveData
+    # Attempt 1: TwelveData (The Paid/Primary API)
     td_success = False
     try:
         if "TWELVE_DATA_KEY" in st.secrets:
@@ -156,7 +171,7 @@ def get_live_rates():
         except Exception as e:
             debug_logs.append(f"GoldPrice.org Error: {str(e)}")
 
-    # Attempt 3: Yahoo Finance (Last Resort - NO FILTER)
+    # Attempt 3: Yahoo Finance (Last Resort)
     if not td_success and not gp_success:
         try:
             debug_logs.append("Trying Yahoo Futures...")
@@ -198,14 +213,35 @@ def get_live_rates():
         "aed": aed_rate,
         "debug": debug_logs,
         "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
-        "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
+        "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S"),
+        "active_mode": is_active_hours
     }
 
 # 7. LOAD DATA
 try:
-    live_data = get_live_rates()
+    # Manual throttle logic
+    if "last_api_call" not in st.session_state:
+        st.session_state.last_api_call = 0
+    
+    current_ts = time.time()
+    tz_khi = pytz.timezone("Asia/Karachi")
+    cur_hour = datetime.now(tz_khi).hour
+    
+    # DYNAMIC THROTTLE
+    # Day (11am-10pm): 90 seconds
+    # Night: 900 seconds (15 mins)
+    wait_time = 90 if (11 <= cur_hour < 22) else 900
+    
+    if (current_ts - st.session_state.last_api_call) > wait_time:
+        clear_all_caches() # Force refresh
+        live_data = get_live_rates()
+        st.session_state.last_api_call = current_ts
+    else:
+        # Use cached if available, otherwise fetch
+        live_data = get_live_rates()
+        
 except:
-    live_data = {"gold": 0, "silver": 0, "usd": 0, "aed": 0, "debug": ["Critical Crash"], "full_date": "Error"}
+    live_data = {"gold": 0, "silver": 0, "usd": 0, "aed": 0, "debug": ["Critical Crash"], "full_date": "Error", "active_mode": True}
 
 try:
     settings = load_settings()
@@ -259,11 +295,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# STATUS BADGE LOGIC
+is_active = live_data.get('active_mode', True)
+status_badge = '<div class="live-badge">● GOLD LIVE</div>' if is_active else '<div class="sleep-badge">☾ NIGHT MODE</div>'
+
 # --- GOLD CARD ---
 if gold_tola > 0:
     st.markdown(f"""
     <div class="price-card">
-        <div class="live-badge">● GOLD LIVE</div>
+        {status_badge}
         <div class="big-price">Rs {gold_tola:,.0f}</div>
         <div class="price-label">24K Gold Per Tola</div>
         <div class="stats-container">
@@ -336,6 +376,8 @@ if st.session_state.admin_auth:
                     st.warning(f"⚠️ {log}")
                 elif "Success" in log:
                     st.success(f"✅ {log}")
+                elif "Trying" in log:
+                    st.info(f"ℹ️ {log}")
                 else:
                     st.error(f"❌ {log}")
         else:
@@ -423,4 +465,10 @@ if st.session_state.admin_auth:
         else:
             st.error("GitHub Disconnected")
 
-st.markdown("""<div class="footer">Islam Jewellery • Sarafa Bazar</div>""", unsafe_allow_html=True)
+# 13. FOOTER
+st.markdown("""
+<div class="footer">
+<strong>Islam Jewellery</strong> website shows approximate gold prices.<br>
+⚠️ <strong>Disclaimer:</strong> Verify with shop before buying.
+</div>
+""", unsafe_allow_html=True)
