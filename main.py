@@ -7,15 +7,21 @@ import pandas as pd
 import altair as alt
 from github import Github
 from streamlit_autorefresh import st_autorefresh
+import time
+import hashlib
+
+# FORCE CACHE CLEAR ON EVERY PAGE LOAD
+st.cache_data.clear()
+st.cache_resource.clear()
 
 # 1. PAGE CONFIG
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH (5 SECONDS) - EXCLUDES ADMIN SECTION
+# AUTO-REFRESH SYSTEM (5 SECONDS FOR ALL USERS)
 # ---------------------------------------------------------
-if "admin_auth" not in st.session_state or not st.session_state.admin_auth:
-    st_autorefresh(interval=5000, key="gold_refresh")
+# This refreshes every 5 seconds for everyone - checks for updates
+st_autorefresh(interval=5000, key="global_refresh")
 
 # 2. HELPER FUNCTIONS
 def update_premium(key, amount):
@@ -26,6 +32,19 @@ def update_premium(key, amount):
 def manual_refresh():
     get_live_rates.clear()
     load_settings.clear()
+
+def get_update_hash():
+    """Generate hash of current settings to detect changes"""
+    try:
+        if repo:
+            content = repo.get_contents("manual.json")
+            settings = json.loads(content.decoded_content.decode())
+            # Include timestamp in hash for change detection
+            content_str = json.dumps(settings, sort_keys=True) + str(int(time.time()) // 5)
+            return hashlib.md5(content_str.encode()).hexdigest()[:8]
+    except:
+        pass
+    return "default"
 
 # 3. CSS STYLES
 st.markdown("""
@@ -58,6 +77,23 @@ st.markdown("""
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
+/* Live update indicator */
+.update-pulse {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 12px;
+    height: 12px;
+    background: #10b981;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    z-index: 9999;
+}
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+    100% { opacity: 1; transform: scale(1); }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,20 +106,20 @@ try:
 except Exception as e:
     st.error(f"GitHub Connection Error: {e}")
 
-# 5. SETTINGS ENGINE
-@st.cache_data(ttl=5, show_spinner=False)
+# 5. SETTINGS ENGINE - NO CACHE (Always fresh)
 def load_settings():
-    default_settings = {"gold_premium": 0, "silver_premium": 0}
+    default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
     if repo:
         try:
             content = repo.get_contents("manual.json")
-            return json.loads(content.decoded_content.decode())
+            data = json.loads(content.decoded_content.decode())
+            data["last_update"] = int(time.time())
+            return data
         except Exception:
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE
-@st.cache_data(ttl=120, show_spinner=False)
+# 6. DATA ENGINE - NO CACHE (Always fresh)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets or "CURR_KEY" not in st.secrets:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "No API Keys", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -112,14 +148,17 @@ def get_live_rates():
     except Exception as e:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Error", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
 
-# 7. LOAD DATA
+# 7. LOAD DATA (ALWAYS FRESH - NO CACHE)
 live_data = get_live_rates()
 settings = load_settings()
 
-if "error" in live_data:
-    st.warning(f"⚠️ API Error: {live_data['error']}")
+# Show live indicator
+st.markdown('<div class="update-pulse" title="Live Updates Active"></div>', unsafe_allow_html=True)
 
-# Initialize Session States safely
+if "error" in live_data:
+    st.warning(f"⚠️ {live_data['error']}")
+
+# Initialize Session States
 if "new_gold" not in st.session_state: 
     st.session_state.new_gold = int(settings.get("gold_premium", 0))
 if "new_silver" not in st.session_state: 
@@ -132,6 +171,41 @@ if "confirm_reset_history" not in st.session_state:
     st.session_state.confirm_reset_history = False
 if "confirm_reset_chart" not in st.session_state: 
     st.session_state.confirm_reset_chart = False
+if "last_publish_time" not in st.session_state:
+    st.session_state.last_publish_time = settings.get("last_update", 0)
+if "show_update_notice" not in st.session_state:
+    st.session_state.show_update_notice = False
+
+# CHECK IF NEW UPDATE WAS PUBLISHED (For all users)
+current_update_time = settings.get("last_update", 0)
+if current_update_time > st.session_state.last_publish_time:
+    st.session_state.last_publish_time = current_update_time
+    st.session_state.show_update_notice = True
+    # Force reload settings to get new values
+    settings = load_settings()
+
+# Show update notification
+if st.session_state.show_update_notice:
+    st.markdown("""
+    <div style="background: linear-gradient(90deg, #d4af37 0%, #f4e5c2 100%); 
+                color: #1a1a1a; 
+                padding: 10px 20px; 
+                border-radius: 8px; 
+                text-align: center;
+                font-weight: 700;
+                margin-bottom: 10px;
+                animation: slideDown 0.5s ease-out;">
+        🔔 Prices Updated! Showing latest rates...
+    </div>
+    <style>
+    @keyframes slideDown {
+        from { transform: translateY(-100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    # Clear notice after showing
+    st.session_state.show_update_notice = False
 
 # 8. CALCULATIONS
 try:
@@ -157,7 +231,9 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">Rs {live_data['usd']:.2f}</div><div class="stat-label">Dollar</div></div>
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
     </div>
-    <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">Last Updated: <b>{live_data['time']}</b></div>
+    <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
+        Last Updated: <b>{live_data['time']}</b> | Auto-refresh: <b>Active</b>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -279,12 +355,15 @@ if st.session_state.admin_auth:
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
+        # PUBLISH BUTTON - Triggers global refresh
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
             if repo:
                 try:
+                    # Add timestamp to force refresh detection
                     new_settings = {
                         "gold_premium": int(st.session_state.new_gold), 
-                        "silver_premium": int(st.session_state.new_silver)
+                        "silver_premium": int(st.session_state.new_silver),
+                        "last_update": int(time.time())
                     }
                     
                     # Update manual.json
@@ -320,8 +399,17 @@ if st.session_state.admin_auth:
                     except Exception:
                         repo.create_file("history.json", "Init", json.dumps(history))
                     
-                    st.markdown('<div class="success-msg">✅ Published! Live in 5 seconds.</div>', unsafe_allow_html=True)
-                    manual_refresh()
+                    st.markdown("""
+                    <div style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0; text-align: center; font-weight: 700;">
+                        ✅ Published Successfully!<br>
+                        <span style="font-size: 0.9rem; font-weight: normal;">All users will see updates in ~5 seconds</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Trigger immediate refresh for admin
+                    st.session_state.last_publish_time = int(time.time())
+                    time.sleep(1)  # Small delay to ensure GitHub update propagates
+                    st.rerun()
                     
                 except Exception as e:
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
@@ -331,8 +419,9 @@ if st.session_state.admin_auth:
     # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
-        stats_cols = st.columns(3)
+        st.info("💡 All data refreshes automatically every 5 seconds for all users")
         
+        stats_cols = st.columns(3)
         with stats_cols[0]:
             st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(st.session_state.new_gold):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[1]:
@@ -342,15 +431,15 @@ if st.session_state.admin_auth:
         
         st.markdown("<br>", unsafe_allow_html=True)
         detail_cols = st.columns(2)
-        
         with detail_cols[0]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #d4af37; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">🟡 Gold Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["gold"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {gold_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Dubai Rate:</strong> AED {gold_dubai_tola:,.0f}</p></div>', unsafe_allow_html=True)
         with detail_cols[1]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["silver"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {silver_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Premium Applied:</strong> Rs {int(st.session_state.new_silver)}</p></div>', unsafe_allow_html=True)
     
-    # TAB 3: HISTORY (WITH OUNCE COLUMNS)
+    # TAB 3: HISTORY
     with tabs[2]:
         st.markdown("### 📜 Rate History Log")
+        st.caption("Updates in real-time for all connected users")
         
         header_cols = st.columns([3, 1])
         with header_cols[0]:
@@ -391,7 +480,6 @@ if st.session_state.admin_auth:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    # Safe column renaming with defaults for missing columns (backward compatibility)
                     column_mapping = {
                         'date': 'Date/Time',
                         'gold_pk': 'Gold PKR',
@@ -401,16 +489,12 @@ if st.session_state.admin_auth:
                         'usd': 'USD Rate'
                     }
                     
-                    # Only rename columns that exist
                     df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-                    
-                    # Ensure all expected columns exist, fill with 0 if missing
                     expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
                     for col in expected_cols:
                         if col not in df.columns:
                             df[col] = 0
                     
-                    # Reorder columns
                     df = df[expected_cols]
                     
                     st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
@@ -424,9 +508,10 @@ if st.session_state.admin_auth:
         except Exception as e:
             st.info(f"📭 History empty or error: {str(e)}")
     
-    # TAB 4: CHARTS (BUG-FREE VERSION)
+    # TAB 4: CHARTS
     with tabs[3]:
         st.markdown("### 📈 Price Trends")
+        st.caption("Live updates every 5 seconds")
         
         ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 1])
         
@@ -463,7 +548,6 @@ if st.session_state.admin_auth:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Bug-free chart rendering
         try:
             if repo:
                 contents = repo.get_contents("history.json")
@@ -472,8 +556,6 @@ if st.session_state.admin_auth:
                 if history_data and len(history_data) > 1:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date'])
-                    
-                    # Safely convert to numeric
                     df['gold_pk'] = pd.to_numeric(df.get('gold_pk', 0), errors='coerce')
                     df['silver_pk'] = pd.to_numeric(df.get('silver_pk', 0), errors='coerce')
                     df = df.dropna(subset=['date'])
@@ -490,9 +572,8 @@ if st.session_state.admin_auth:
                         title = "Silver Price History"
                     
                     if len(df_chart) < 2:
-                        st.info("📊 Not enough data points for chart.")
+                        st.info("📊 Not enough data points.")
                     else:
-                        # Create base chart
                         base = alt.Chart(df_chart).encode(
                             x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
                             y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
@@ -503,16 +584,13 @@ if st.session_state.admin_auth:
                         )
                         
                         if chart_type == "Area":
-                            # Layer area and line
                             chart = (base.mark_area(color=color, opacity=0.3) + 
                                     base.mark_line(color=color, strokeWidth=3) + 
                                     base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
                         else:
-                            # Line only
                             chart = (base.mark_line(color=color, strokeWidth=3) + 
                                     base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
                         
-                        # Configure and display
                         final_chart = chart.properties(
                             title=title,
                             height=450
@@ -531,14 +609,13 @@ if st.session_state.admin_auth:
                         
                         st.altair_chart(final_chart, use_container_width=True)
                         
-                        # Metrics
                         c1, c2, c3, c4 = st.columns(4)
                         c1.metric("📈 High", f"Rs {df_chart[y_col].max():,.0f}")
                         c2.metric("📉 Low", f"Rs {df_chart[y_col].min():,.0f}")
                         c3.metric("📊 Avg", f"Rs {df_chart[y_col].mean():,.0f}")
                         c4.metric("📝 Count", len(df_chart))
                 else:
-                    st.info("📊 Need 2+ records. Publish rates multiple times.")
+                    st.info("📊 Need 2+ records.")
         except Exception as e:
             st.error(f"Chart error: {str(e)}")
 
