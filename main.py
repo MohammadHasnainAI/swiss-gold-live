@@ -11,7 +11,7 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v42.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v43.0", page_icon="💎", layout="centered")
 
 # 2. AUTO-REFRESH LOGIC (20s Interval)
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
@@ -92,7 +92,7 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 8. DATA ENGINE
+# 8. DATA ENGINE (Yahoo Priority)
 @st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
     tz_khi = pytz.timezone("Asia/Karachi")
@@ -105,38 +105,58 @@ def get_live_rates():
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # 1. TwelveData
-    td_success = False
+    # ---------------------------------------------------------
+    # PART 1: GOLD & SILVER (PRIORITY: YAHOO -> TWELVE -> GP)
+    # ---------------------------------------------------------
+    
+    # Priority 1: Yahoo Finance (Unlimited)
+    market_success = False
     try:
-        if "TWELVE_DATA_KEY" in st.secrets:
-            TD_KEY = st.secrets["TWELVE_DATA_KEY"]
-            url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
-            gold_res = requests.get(url_gold, timeout=5)
-            if gold_res.status_code == 200:
-                data = gold_res.json()
-                if 'price' in data:
-                    gold_price = float(data['price'])
-                    td_success = True
-                else:
-                    debug_logs.append(f"TD Gold Limit: {data.get('message', 'Limit reached')}")
-            else:
-                debug_logs.append(f"TD Gold HTTP: {gold_res.status_code}")
+        g_tick = yf.Ticker("GC=F") 
+        g_hist = g_tick.history(period="1d")
+        if not g_hist.empty:
+            gold_price = float(g_hist['Close'].iloc[-1])
+        
+        s_tick = yf.Ticker("SI=F")
+        s_hist = s_tick.history(period="1d")
+        if not s_hist.empty:
+            silver_price = float(s_hist['Close'].iloc[-1])
             
-            if td_success:
-                url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
-                slv_res = requests.get(url_slv, timeout=5)
-                if slv_res.status_code == 200:
-                    s_data = slv_res.json()
-                    silver_price = float(s_data.get('price', 0))
+        if gold_price > 0:
+            market_success = True
     except Exception as e:
-        debug_logs.append(f"TD Error: {str(e)}")
-        td_success = False
+        debug_logs.append(f"Yahoo Market Error: {str(e)}")
 
-    # 2. GoldPrice.org (Backup)
-    gp_success = False
-    if not td_success:
+    # Priority 2: TwelveData (Backup - Limited)
+    if not market_success:
         try:
-            debug_logs.append("Trying GoldPrice.org...")
+            if "TWELVE_DATA_KEY" in st.secrets:
+                TD_KEY = st.secrets["TWELVE_DATA_KEY"]
+                url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
+                gold_res = requests.get(url_gold, timeout=5)
+                
+                if gold_res.status_code == 200:
+                    data = gold_res.json()
+                    if 'price' in data:
+                        gold_price = float(data['price'])
+                        
+                        # Get Silver if Gold succeeded
+                        url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
+                        slv_res = requests.get(url_slv, timeout=5)
+                        if slv_res.status_code == 200:
+                            s_data = slv_res.json()
+                            silver_price = float(s_data.get('price', 0))
+                        
+                        market_success = True
+                        debug_logs.append("Used Backup: TwelveData")
+                    else:
+                        debug_logs.append(f"TD Limit: {data.get('message', 'Limit')}")
+        except Exception as e:
+            debug_logs.append(f"TD Error: {str(e)}")
+
+    # Priority 3: GoldPrice.org (Last Resort)
+    if not market_success:
+        try:
             headers = {'User-Agent': 'Mozilla/5.0'}
             gp_url = "https://data-asg.goldprice.org/dbXRates/USD"
             gp_res = requests.get(gp_url, headers=headers, timeout=5)
@@ -147,55 +167,42 @@ def get_live_rates():
                     gold_price = float(item.get('xauPrice', 0))
                     silver_price = float(item.get('xagPrice', 0))
                     if gold_price > 0:
-                        gp_success = True
-                        debug_logs.append("Success: Used GoldPrice.org")
+                        market_success = True
+                        debug_logs.append("Used Backup: GoldPrice.org")
         except Exception as e:
-            debug_logs.append(f"GoldPrice.org Error: {str(e)}")
+            debug_logs.append(f"GoldPrice Error: {str(e)}")
 
-    # 3. Yahoo Finance
-    if not td_success and not gp_success:
-        try:
-            debug_logs.append("Trying Yahoo Futures...")
-            g_tick = yf.Ticker("GC=F") 
-            g_hist = g_tick.history(period="1d")
-            if not g_hist.empty:
-                gold_price = float(g_hist['Close'].iloc[-1])
-            s_tick = yf.Ticker("SI=F")
-            s_hist = s_tick.history(period="1d")
-            if not s_hist.empty:
-                silver_price = float(s_hist['Close'].iloc[-1])
-        except Exception as e:
-            debug_logs.append(f"Yahoo Error: {str(e)}")
-
-    # 4. Currency (ExchangeRate-API)
+    # ---------------------------------------------------------
+    # PART 2: CURRENCY (PRIORITY: YAHOO -> EXCHANGERATE)
+    # ---------------------------------------------------------
+    
+    # Priority 1: Yahoo Finance (Unlimited)
+    currency_success = False
     try:
-        if "CURR_KEY" in st.secrets:
-            CURR_KEY = st.secrets["CURR_KEY"]
-            url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
-            curr_res = requests.get(url_curr, timeout=5)
-            if curr_res.status_code == 200:
-                c_data = curr_res.json()
-                usd_rate = float(c_data.get('conversion_rates', {}).get('PKR', 0))
-                aed_rate = float(c_data.get('conversion_rates', {}).get('AED', 0))
-            else:
-                debug_logs.append(f"Currency API Status: {curr_res.status_code}")
-        else:
-            debug_logs.append("Missing CURR_KEY")
+        c_tick = yf.Ticker("PKR=X")
+        c_hist = c_tick.history(period="1d")
+        if not c_hist.empty:
+            usd_rate = float(c_hist['Close'].iloc[-1])
+            aed_rate = 3.67 # Fixed Peg
+            currency_success = True
     except Exception as e:
-        debug_logs.append(f"Currency Exception: {str(e)}")
+        debug_logs.append(f"Yahoo Currency Error: {str(e)}")
 
-    # 5. CURRENCY BACKUP (Yahoo Finance) - NEW!
-    if usd_rate == 0:
+    # Priority 2: ExchangeRate-API (Backup - Limited)
+    if not currency_success:
         try:
-            debug_logs.append("Trying Yahoo Currency Backup...")
-            curr_tick = yf.Ticker("PKR=X")
-            curr_hist = curr_tick.history(period="1d")
-            if not curr_hist.empty:
-                usd_rate = float(curr_hist['Close'].iloc[-1])
-                aed_rate = 3.67 # Fixed peg
-                debug_logs.append("Success: Used Yahoo Currency")
+            if "CURR_KEY" in st.secrets:
+                CURR_KEY = st.secrets["CURR_KEY"]
+                url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
+                curr_res = requests.get(url_curr, timeout=5)
+                if curr_res.status_code == 200:
+                    c_data = curr_res.json()
+                    usd_rate = float(c_data.get('conversion_rates', {}).get('PKR', 0))
+                    aed_rate = float(c_data.get('conversion_rates', {}).get('AED', 0))
+                    currency_success = True
+                    debug_logs.append("Used Backup: ExchangeRate-API")
         except Exception as e:
-            debug_logs.append(f"Yahoo Currency Error: {str(e)}")
+            debug_logs.append(f"Currency API Error: {str(e)}")
 
     return {
         "gold": gold_price, "silver": silver_price, "usd": usd_rate, "aed": aed_rate,
@@ -358,14 +365,16 @@ if st.session_state.admin_auth:
                     st.success(f"✅ {log}")
                 elif "Trying" in log:
                     st.info(f"ℹ️ {log}")
+                elif "Used Backup" in log:
+                    st.warning(f"🔄 {log}")
                 else:
                     st.error(f"❌ {log}")
         else:
-            st.success("✅ All APIs Connected Successfully")
+            st.success("✅ All APIs Connected Successfully (Yahoo Primary)")
 
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
-    # TAB 1: Update Rates
+    # TAB 1: Update
     with tabs[0]:
         st.markdown("### Select Metal")
         btn_cols = st.columns(2)
@@ -440,13 +449,16 @@ if st.session_state.admin_auth:
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
+        # PUBLISH BUTTON
+        publish_disabled = st.session_state.get("publishing", False)
+        if publish_disabled:
+            st.warning("⏳ Publishing... Please wait")
+        
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True, disabled=publish_disabled):
             if repo and not publish_disabled:
                 st.session_state.publishing = True
                 st.session_state.is_admin_publishing = True
-                
                 try:
-                    # CRITICAL: Get FRESH live rates
                     get_live_rates.clear()
                     fresh = get_live_rates()
                     
@@ -498,14 +510,13 @@ if st.session_state.admin_auth:
                         st.session_state.last_seen_update = new_settings["last_update"]
                         clear_all_caches()
                         st.rerun()
-                        
                 except Exception as e:
                     st.session_state.publishing = False
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
-    
-    # TAB 2: Statistics
+
+    # TAB 2: Stats
     with tabs[1]:
         st.markdown("### Market Overview")
         st.info(f"Gold Ounce: ${gold_ounce:,.2f} | USD/PKR: {usd_rate:.2f} | Premium Gold: Rs {int(gold_premium):,}")
@@ -550,79 +561,37 @@ if st.session_state.admin_auth:
                 <p style="margin: 0.3rem 0; color: #666; font-size: 1.1rem; font-weight: bold;">FINAL: Rs {silver_tola:,.0f}</p>
             </div>
             """, unsafe_allow_html=True)
-    
-    # TAB 3: HISTORY
+
+    # TAB 3: History
     with tabs[2]:
-        st.markdown("### 📜 Rate History Log")
-        
-        header_cols = st.columns([3, 1])
-        with header_cols[0]:
-            st.caption(f"Last 60 records")
-        with header_cols[1]:
-            if st.button("🗑️ Reset History", type="secondary", key="reset_hist_btn"):
-                st.session_state.confirm_reset_history = True
+        if st.button("🗑️ Reset History"):
+            st.session_state.confirm_reset_history = True
         
         if st.session_state.confirm_reset_history:
-            st.markdown('<div class="reset-container">', unsafe_allow_html=True)
-            st.markdown("⚠️ **Warning:** This will permanently delete all history records!")
-            conf_cols = st.columns(2)
-            with conf_cols[0]:
-                if st.button("✅ Yes, Delete All", type="primary", key="confirm_hist_yes", use_container_width=True):
-                    if repo:
-                        try:
-                            h_content = repo.get_contents("history.json")
-                            repo.update_file(h_content.path, "Reset history", json.dumps([]), h_content.sha)
-                            st.session_state.confirm_reset_history = False
-                            st.success("✅ History cleared!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                    else:
-                        st.error("GitHub not connected")
-            with conf_cols[1]:
-                if st.button("❌ Cancel", key="cancel_hist", use_container_width=True):
-                    st.session_state.confirm_reset_history = False
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-        
+            if st.button("✅ Confirm"):
+                if repo:
+                    try:
+                        hc = repo.get_contents("history.json")
+                        repo.update_file(hc.path, "Reset", json.dumps([]), hc.sha)
+                        st.success("Reset!")
+                        st.session_state.confirm_reset_history = False
+                    except:
+                        st.error("Error")
+            if st.button("❌ Cancel"):
+                st.session_state.confirm_reset_history = False
+
         try:
             if repo:
-                contents = repo.get_contents("history.json")
-                history_data = json.loads(contents.decoded_content.decode())
-                
-                if history_data and len(history_data) > 0:
-                    df = pd.DataFrame(history_data)
-                    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
-                    
-                    column_mapping = {
-                        'date': 'Date/Time',
-                        'gold_pk': 'Gold PKR',
-                        'silver_pk': 'Silver PKR',
-                        'gold_ounce': 'Gold Oz ($)',
-                        'silver_ounce': 'Silver Oz ($)',
-                        'usd': 'USD Rate'
-                    }
-                    
-                    df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-                    expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
-                    for col in expected_cols:
-                        if col not in df.columns:
-                            df[col] = 0
-                    
-                    df = df[expected_cols]
-                    
-                    st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
-                    
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Export CSV", csv, f"history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+                hc = repo.get_contents("history.json")
+                data = json.loads(hc.decoded_content.decode())
+                if isinstance(data, list) and len(data) > 0:
+                    st.dataframe(data)
                 else:
-                    st.info("📭 No history records found.")
-            else:
-                st.error("❌ GitHub not connected")
-        except Exception as e:
-            st.info(f"📭 History empty or error: {str(e)}")
-    
-    # TAB 4: CHARTS
+                    st.info("No history")
+        except:
+            st.info("Empty")
+
+    # TAB 4: Charts
     with tabs[3]:
         st.markdown("### 📈 Price Trends")
         
