@@ -8,24 +8,38 @@ import altair as alt
 from github import Github
 import time
 import yfinance as yf
+from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v39.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v41.0", page_icon="💎", layout="centered")
 
-# 2. HELPER FUNCTIONS
+# 2. AUTO-REFRESH LOGIC (20s Interval)
+st_autorefresh(interval=20000, limit=None, key="gold_sync")
+
+# 3. SESSION STATE
+if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
+if "selected_metal" not in st.session_state: st.session_state.selected_metal = "Gold"
+if "publishing" not in st.session_state: st.session_state.publishing = False
+if "confirm_reset_history" not in st.session_state: st.session_state.confirm_reset_history = False
+if "confirm_reset_chart" not in st.session_state: st.session_state.confirm_reset_chart = False
+if "last_api_call" not in st.session_state: st.session_state.last_api_call = 0
+if "last_seen_update" not in st.session_state: st.session_state.last_seen_update = 0
+if "new_gold" not in st.session_state: st.session_state.new_gold = 0
+if "new_silver" not in st.session_state: st.session_state.new_silver = 0
+
+# 4. HELPER FUNCTIONS
 def clear_all_caches():
-    """Clear all caches to ensure fresh data"""
     st.cache_data.clear()
     get_live_rates.clear()
     load_settings.clear()
 
-# 3. CSS STYLES
+# 5. CSS STYLES (Includes Admin Styles)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
 .block-container {padding-top: 4.5rem !important; padding-bottom: 1rem !important; max-width: 700px;}
-.header-box {text-align:center; padding: 20px 0; margin-bottom:15px; margin-top: 0px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);}
+.header-box {text-align:center; padding: 20px 0; margin-bottom:15px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);}
 .brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.2; margin-bottom: 8px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);}
 .brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.9;}
 .price-card {background:#ffffff; border-radius:16px; padding:15px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.04); border:1px solid #eef0f2; margin-bottom:8px;}
@@ -43,32 +57,18 @@ st.markdown("""
 .btn-call {background-color:#222;}
 .btn-whatsapp {background-color:#25D366;}
 .footer {background:#f1f3f5; padding:10px; border-radius: 10px; text-align:center; font-size:0.7rem; color:#666; margin-top:15px;}
+/* Admin Styles */
 .login-card {background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 2rem auto; text-align: center; border-top: 4px solid #d4af37;}
 .admin-title {font-size: 1.8rem; font-weight: 800; color: #d4af37; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 2px;}
 .metric-card-pro {background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-bottom: 3px solid #d4af37; text-align: center;}
 .control-box {background: #fafafa; border-radius: 16px; padding: 2rem; border: 1px solid #e0e0e0; margin-top: 1rem;}
 .success-msg {background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0;}
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
-.warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
-.update-toast {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: linear-gradient(135deg, #d4af37 0%, #f4e5c2 100%);
-    color: #1a1a1a;
-    padding: 15px 25px;
-    border-radius: 12px;
-    font-weight: 700;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    z-index: 9999;
-    animation: slideIn 0.5s ease-out;
-    border: 2px solid #d4af37;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# 4. GITHUB CONNECTION
+# 6. GITHUB CONNECTION
 repo = None 
 try:
     if "GIT_TOKEN" in st.secrets:
@@ -77,8 +77,8 @@ try:
 except Exception as e:
     st.error(f"GitHub Connection Failed: {e}")
 
-# 5. SETTINGS ENGINE
-@st.cache_data(ttl=10, show_spinner=False)
+# 7. SETTINGS ENGINE
+@st.cache_data(ttl=15, show_spinner=False)
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
     if repo:
@@ -92,39 +92,26 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - SMART THROTTLE (PAKISTAN TIME)
+# 8. DATA ENGINE
 @st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
-    """
-    SMART SCHEDULE (PAKISTAN TIME):
-    - 07:00 AM to 11:59 PM: Fast Updates (Active)
-    - 12:00 AM to 06:59 AM: Slow Updates (Sleep)
-    """
-    
-    # 1. Determine "Smart Cache" Duration
     tz_khi = pytz.timezone("Asia/Karachi")
     now_khi = datetime.now(tz_khi)
     current_hour = now_khi.hour
-    
-    # Smart Logic: Active hours 07:00 to 23:59
     is_active_hours = 7 <= current_hour <= 23
-    
     debug_logs = []
     gold_price = 0.0
     silver_price = 0.0
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # --- PHASE 1: GOLD & SILVER ---
-    
-    # Attempt 1: TwelveData (The Paid/Primary API)
+    # 1. TwelveData
     td_success = False
     try:
         if "TWELVE_DATA_KEY" in st.secrets:
             TD_KEY = st.secrets["TWELVE_DATA_KEY"]
             url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
             gold_res = requests.get(url_gold, timeout=5)
-            
             if gold_res.status_code == 200:
                 data = gold_res.json()
                 if 'price' in data:
@@ -134,7 +121,7 @@ def get_live_rates():
                     debug_logs.append(f"TD Gold Limit: {data.get('message', 'Limit reached')}")
             else:
                 debug_logs.append(f"TD Gold HTTP: {gold_res.status_code}")
-                
+            
             if td_success:
                 url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
                 slv_res = requests.get(url_slv, timeout=5)
@@ -145,7 +132,7 @@ def get_live_rates():
         debug_logs.append(f"TD Error: {str(e)}")
         td_success = False
 
-    # Attempt 2: GoldPrice.org (Backup)
+    # 2. GoldPrice.org (Backup)
     gp_success = False
     if not td_success:
         try:
@@ -153,7 +140,6 @@ def get_live_rates():
             headers = {'User-Agent': 'Mozilla/5.0'}
             gp_url = "https://data-asg.goldprice.org/dbXRates/USD"
             gp_res = requests.get(gp_url, headers=headers, timeout=5)
-            
             if gp_res.status_code == 200:
                 gp_data = gp_res.json()
                 if 'items' in gp_data and len(gp_data['items']) > 0:
@@ -163,11 +149,10 @@ def get_live_rates():
                     if gold_price > 0:
                         gp_success = True
                         debug_logs.append("Success: Used GoldPrice.org")
-            
         except Exception as e:
             debug_logs.append(f"GoldPrice.org Error: {str(e)}")
 
-    # Attempt 3: Yahoo Finance (Last Resort)
+    # 3. Yahoo Finance
     if not td_success and not gp_success:
         try:
             debug_logs.append("Trying Yahoo Futures...")
@@ -175,22 +160,19 @@ def get_live_rates():
             g_hist = g_tick.history(period="1d")
             if not g_hist.empty:
                 gold_price = float(g_hist['Close'].iloc[-1])
-            
             s_tick = yf.Ticker("SI=F")
             s_hist = s_tick.history(period="1d")
             if not s_hist.empty:
                 silver_price = float(s_hist['Close'].iloc[-1])
-                
         except Exception as e:
             debug_logs.append(f"Yahoo Error: {str(e)}")
 
-    # --- PHASE 2: CURRENCY ---
+    # 4. Currency
     try:
         if "CURR_KEY" in st.secrets:
             CURR_KEY = st.secrets["CURR_KEY"]
             url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
             curr_res = requests.get(url_curr, timeout=5)
-            
             if curr_res.status_code == 200:
                 c_data = curr_res.json()
                 usd_rate = float(c_data.get('conversion_rates', {}).get('PKR', 0))
@@ -203,34 +185,22 @@ def get_live_rates():
         debug_logs.append(f"Currency Exception: {str(e)}")
 
     return {
-        "gold": gold_price,
-        "silver": silver_price,
-        "usd": usd_rate,
-        "aed": aed_rate,
+        "gold": gold_price, "silver": silver_price, "usd": usd_rate, "aed": aed_rate,
         "debug": debug_logs,
         "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
         "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S"),
         "active_mode": is_active_hours
     }
 
-# 7. LOAD DATA
+# 9. LOAD & THROTTLE
 try:
-    # Manual throttle logic
-    if "last_api_call" not in st.session_state:
-        st.session_state.last_api_call = 0
-    
     current_ts = time.time()
     tz_khi = pytz.timezone("Asia/Karachi")
     cur_hour = datetime.now(tz_khi).hour
-    
-    # DYNAMIC THROTTLE LOGIC (PAKISTAN TIME)
-    if 7 <= cur_hour <= 23:
-        wait_time = 90  # 1.5 Minutes
-    else:
-        wait_time = 1800 # 30 Minutes
+    wait_time = 90 if (7 <= cur_hour <= 23) else 1800
     
     if (current_ts - st.session_state.last_api_call) > wait_time:
-        clear_all_caches() # Force refresh
+        clear_all_caches()
         live_data = get_live_rates()
         st.session_state.last_api_call = current_ts
     else:
@@ -243,34 +213,27 @@ try:
 except:
     settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
 
-# 8. STATE INIT
-if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
-if "selected_metal" not in st.session_state: st.session_state.selected_metal = "Gold"
-if "publishing" not in st.session_state: st.session_state.publishing = False
-if "last_seen_update" not in st.session_state: st.session_state.last_seen_update = settings.get("last_update", 0)
-if "new_gold" not in st.session_state: st.session_state.new_gold = int(settings.get("gold_premium", 0))
-if "new_silver" not in st.session_state: st.session_state.new_silver = int(settings.get("silver_premium", 0))
-if "confirm_reset_history" not in st.session_state: st.session_state.confirm_reset_history = False
-if "confirm_reset_chart" not in st.session_state: st.session_state.confirm_reset_chart = False
+# 10. SYNC AND AUTO-UPDATE CHECK
+# This makes sure Admin sees current values from repo, not just session
+if st.session_state.new_gold == 0:
+    st.session_state.new_gold = int(settings.get("gold_premium", 0))
+if st.session_state.new_silver == 0:
+    st.session_state.new_silver = int(settings.get("silver_premium", 0))
 
-# 9. UPDATE CHECK
-current_update_time = settings.get("last_update", 0)
-if current_update_time > st.session_state.last_seen_update:
+if settings.get("last_update", 0) > st.session_state.last_seen_update:
     if not st.session_state.get("is_admin_publishing", False):
-        st.session_state.last_seen_update = current_update_time
+        st.session_state.last_seen_update = settings.get("last_update", 0)
         clear_all_caches()
         st.rerun()
 
-# 10. CALCULATIONS (Raw data only)
+# 11. CALCULATIONS
 gold_ounce = float(live_data.get('gold', 0))
 silver_ounce = float(live_data.get('silver', 0))
 usd_rate = float(live_data.get('usd', 0))
 aed_rate = float(live_data.get('aed', 0))
-
 gold_premium = float(settings.get("gold_premium", 0))
 silver_premium = float(settings.get("silver_premium", 0))
 
-# Only calculate if data exists
 if gold_ounce > 0 and usd_rate > 0:
     gold_tola = ((gold_ounce / 31.1035) * 11.66 * usd_rate) + gold_premium
     gold_dubai_tola = (gold_ounce / 31.1035) * 11.66 * aed_rate
@@ -283,7 +246,7 @@ if silver_ounce > 0 and usd_rate > 0:
 else:
     silver_tola = 0
 
-# 11. DISPLAY
+# 12. DISPLAY
 st.markdown("""
 <div class="header-box">
     <div class="brand-title">Islam Jewellery</div>
@@ -291,11 +254,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# STATUS BADGE LOGIC
 is_active = live_data.get('active_mode', True)
 status_badge = '<div class="live-badge">● GOLD LIVE</div>' if is_active else '<div class="sleep-badge">☾ NIGHT MODE</div>'
 
-# --- GOLD CARD ---
+# Gold Card
 if gold_tola > 0:
     st.markdown(f"""
     <div class="price-card">
@@ -320,7 +282,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# --- SILVER CARD ---
+# Silver Card
 if silver_tola > 0:
     st.markdown(f"""
     <div class="price-card">
@@ -341,14 +303,14 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# REFRESH BUTTON (MOVED HERE)
+# REFRESH BUTTON
 if st.button("🔄 Refresh Rates", use_container_width=True):
     clear_all_caches()
     st.rerun()
 
 st.markdown("""<div class="btn-grid"><a href="tel:03492114166" class="contact-btn btn-call">📞 Call Now</a><a href="https://wa.me/923492114166" class="contact-btn btn-whatsapp">💬 WhatsApp</a></div>""", unsafe_allow_html=True)
 
-# 12. ADMIN SECTION
+# 13. ADMIN SECTION
 if not st.session_state.admin_auth:
     with st.expander("🔒 Admin Login"):
         st.markdown("""<div class="login-card"><div style="font-size: 2.5rem; margin-bottom: 1rem;">🔐</div><div class="admin-title">Admin Portal</div><p style="color: #666; margin-bottom: 2rem;">Authorized Personnel Only</p></div>""", unsafe_allow_html=True)
@@ -376,6 +338,21 @@ if st.session_state.admin_auth:
             clear_all_caches()
             st.rerun()
     
+    # DEBUGGER
+    with st.expander("🛠️ Connection Status (Debug)", expanded=True):
+        if live_data.get("debug"):
+            for log in live_data["debug"]:
+                if "TD Gold Limit" in log:
+                    st.warning(f"⚠️ {log}")
+                elif "Success" in log:
+                    st.success(f"✅ {log}")
+                elif "Trying" in log:
+                    st.info(f"ℹ️ {log}")
+                else:
+                    st.error(f"❌ {log}")
+        else:
+            st.success("✅ All APIs Connected Successfully")
+
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
     # TAB 1: Update Rates
@@ -410,7 +387,7 @@ if st.session_state.admin_auth:
             val = st.number_input("Gold Premium", value=current, step=step, key="gold_input")
             st.session_state.new_gold = int(val)
             
-            # Calculate preview using CURRENT live data
+            # Preview
             preview_gold = ((gold_ounce / 31.1035) * 11.66 * usd_rate) + st.session_state.new_gold
             
             st.markdown(f"""
@@ -441,7 +418,7 @@ if st.session_state.admin_auth:
             val = st.number_input("Silver Premium", value=current, step=step, key="silver_input")
             st.session_state.new_silver = int(val)
             
-            # Calculate preview using CURRENT live data
+            # Preview
             preview_silver = ((silver_ounce / 31.1035) * 11.66 * usd_rate) + st.session_state.new_silver
             
             st.markdown(f"""
@@ -453,7 +430,7 @@ if st.session_state.admin_auth:
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # PUBLISH BUTTON - WITH DEBOUNCE PROTECTION
+        # PUBLISH BUTTON
         publish_disabled = st.session_state.get("publishing", False)
         
         if publish_disabled:
@@ -461,86 +438,63 @@ if st.session_state.admin_auth:
         
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True, disabled=publish_disabled):
             if repo and not publish_disabled:
-                # Set publishing flag to prevent double-clicks
                 st.session_state.publishing = True
                 st.session_state.is_admin_publishing = True
                 
                 try:
-                    # CRITICAL: Get FRESH live rates before saving
-                    fresh_rates = get_live_rates()
+                    # CRITICAL: Get FRESH live rates
+                    get_live_rates.clear()
+                    fresh = get_live_rates()
                     
-                    # Calculate with FRESH data
-                    fresh_gold_oz = float(fresh_rates.get('gold', 2750.0))
-                    fresh_silver_oz = float(fresh_rates.get('silver', 32.0))
-                    fresh_usd = float(fresh_rates.get('usd', 278.0))
-                    fresh_aed = float(fresh_rates.get('aed', 3.67))
-                    
-                    calc_gold = ((fresh_gold_oz / 31.1035) * 11.66 * fresh_usd) + int(st.session_state.new_gold)
-                    calc_silver = ((fresh_silver_oz / 31.1035) * 11.66 * fresh_usd) + int(st.session_state.new_silver)
-                    
-                    new_settings = {
-                        "gold_premium": int(st.session_state.new_gold), 
-                        "silver_premium": int(st.session_state.new_silver),
-                        "last_update": int(time.time())
-                    }
-                    
-                    # Update manual.json
-                    try:
-                        contents = repo.get_contents("manual.json")
-                        repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", 
-                                       json.dumps(new_settings), contents.sha)
-                    except Exception:
-                        repo.create_file("manual.json", "Init", json.dumps(new_settings))
-                    
-                    # Update History - SAFETY CHECK ADDED
-                    try:
-                        h_content = repo.get_contents("history.json")
-                        hist_data = json.loads(h_content.decoded_content.decode())
-                        if not isinstance(hist_data, list):
-                            history = []
-                        else:
-                            history = hist_data
-                    except Exception:
-                        history = []
-                    
-                    history.append({
-                        "date": fresh_rates.get('full_date', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                        "gold_pk": float(calc_gold),
-                        "silver_pk": float(calc_silver),
-                        "gold_ounce": fresh_gold_oz,
-                        "silver_ounce": fresh_silver_oz,
-                        "usd": fresh_usd
-                    })
-                    
-                    if len(history) > 60: 
-                        history = history[-60:]
-                    
-                    try:
-                        repo.update_file(h_content.path, f"Hist - {datetime.now().strftime('%H:%M')}", 
-                                       json.dumps(history), h_content.sha)
-                    except Exception:
-                        repo.create_file("history.json", "Init", json.dumps(history))
-                    
-                    # Update local timestamp to prevent self-refresh loop
-                    st.session_state.last_seen_update = new_settings["last_update"]
-                    
-                    st.markdown(f"""
-                    <div style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0; text-align: center; font-weight: 700;">
-                        ✅ PUBLISHED SUCCESSFULLY!<br>
-                        <span style="font-size: 0.85rem;">
-                        Gold: Rs {calc_gold:,.0f} | 
-                        Silver: Rs {calc_silver:,.0f}<br>
-                        All users will update automatically
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Reset publishing flag
-                    st.session_state.publishing = False
-                    clear_all_caches()
-                    time.sleep(0.5)
-                    st.rerun()
-                    
+                    if fresh['gold'] == 0 or fresh['usd'] == 0:
+                        st.error("❌ Cannot publish: APIs are offline.")
+                        st.session_state.publishing = False
+                    else:
+                        c_gold = ((fresh['gold'] / 31.1035) * 11.66 * fresh['usd']) + int(st.session_state.new_gold)
+                        c_silver = ((fresh['silver'] / 31.1035) * 11.66 * fresh['usd']) + int(st.session_state.new_silver)
+                        
+                        new_settings = {
+                            "gold_premium": int(st.session_state.new_gold), 
+                            "silver_premium": int(st.session_state.new_silver),
+                            "last_update": int(time.time())
+                        }
+                        
+                        try:
+                            c = repo.get_contents("manual.json")
+                            repo.update_file(c.path, "Update", json.dumps(new_settings), c.sha)
+                        except:
+                            repo.create_file("manual.json", "Init", json.dumps(new_settings))
+                            
+                        # Update History
+                        try:
+                            hc = repo.get_contents("history.json")
+                            hist_data = json.loads(hc.decoded_content.decode())
+                            hist = hist_data if isinstance(hist_data, list) else []
+                        except:
+                            hist = []
+                        
+                        hist.append({
+                            "date": fresh['full_date'],
+                            "gold_pk": c_gold,
+                            "silver_pk": c_silver,
+                            "gold_ounce": fresh['gold'],
+                            "silver_ounce": fresh['silver'],
+                            "usd": fresh['usd']
+                        })
+                        if len(hist) > 60: hist = hist[-60:]
+                        
+                        try:
+                            repo.update_file(hc.path, "Hist", json.dumps(hist), hc.sha)
+                        except:
+                            repo.create_file("history.json", "Init", json.dumps(hist))
+                            
+                        st.success("✅ Updated! Syncing all users...")
+                        time.sleep(1)
+                        st.session_state.publishing = False
+                        st.session_state.last_seen_update = new_settings["last_update"]
+                        clear_all_caches()
+                        st.rerun()
+                        
                 except Exception as e:
                     st.session_state.publishing = False
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
@@ -774,7 +728,7 @@ if st.session_state.admin_auth:
         except Exception as e:
             st.error(f"Chart error: {str(e)}")
 
-# 13. FOOTER
+# 14. FOOTER
 st.markdown("""
 <div class="footer">
 <strong>Islam Jewellery</strong> website shows approximate gold prices.<br>
