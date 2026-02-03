@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH (Disable when admin logged in)
+# AUTO-REFRESH (5 SECONDS) - EXCLUDES ADMIN SECTION
 # ---------------------------------------------------------
 if "admin_auth" not in st.session_state or not st.session_state.admin_auth:
     st_autorefresh(interval=5000, key="gold_refresh")
@@ -50,8 +50,6 @@ st.markdown("""
 .btn-call {background-color:#222;}
 .btn-whatsapp {background-color:#25D366;}
 .footer {background:#f1f3f5; padding:10px; border-radius: 10px; text-align:center; font-size:0.7rem; color:#666; margin-top:15px;}
-
-/* Admin Styles */
 .login-card {background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 2rem auto; text-align: center; border-top: 4px solid #d4af37;}
 .admin-title {font-size: 1.8rem; font-weight: 800; color: #d4af37; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 2px;}
 .metric-card-pro {background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-bottom: 3px solid #d4af37; text-align: center;}
@@ -60,10 +58,6 @@ st.markdown("""
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
-
-/* Market Closed Styles */
-.closed-badge {background-color:#fee2e2; color:#dc2626; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
-.closed-price {font-size:2rem; font-weight:800; color:#9ca3af; line-height:1; margin:4px 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -76,15 +70,10 @@ try:
 except Exception as e:
     st.error(f"GitHub Connection Error: {e}")
 
-# 5. SETTINGS ENGINE (WITH MARKET STATUS)
+# 5. SETTINGS ENGINE
 @st.cache_data(ttl=5, show_spinner=False)
 def load_settings():
-    default_settings = {
-        "gold_premium": 0, 
-        "silver_premium": 0,
-        "gold_market_open": True,  # NEW: Market status
-        "silver_market_open": True # NEW: Market status
-    }
+    default_settings = {"gold_premium": 0, "silver_premium": 0}
     if repo:
         try:
             content = repo.get_contents("manual.json")
@@ -130,7 +119,7 @@ settings = load_settings()
 if "error" in live_data:
     st.warning(f"⚠️ API Error: {live_data['error']}")
 
-# Initialize Session States
+# Initialize Session States safely
 if "new_gold" not in st.session_state: 
     st.session_state.new_gold = int(settings.get("gold_premium", 0))
 if "new_silver" not in st.session_state: 
@@ -143,12 +132,6 @@ if "confirm_reset_history" not in st.session_state:
     st.session_state.confirm_reset_history = False
 if "confirm_reset_chart" not in st.session_state: 
     st.session_state.confirm_reset_chart = False
-
-# NEW: Initialize market status in session state
-if "gold_market_open" not in st.session_state:
-    st.session_state.gold_market_open = settings.get("gold_market_open", True)
-if "silver_market_open" not in st.session_state:
-    st.session_state.silver_market_open = settings.get("silver_market_open", True)
 
 # 8. CALCULATIONS
 try:
@@ -164,60 +147,31 @@ except Exception as e:
 # 9. MAIN DISPLAY
 st.markdown("""<div class="header-box"><div class="brand-title">Islam Jewellery</div><div class="brand-subtitle">Sarafa Bazar • Premium Gold</div></div>""", unsafe_allow_html=True)
 
-# GOLD CARD (WITH MARKET STATUS CHECK)
-gold_market_open = settings.get("gold_market_open", True)
-
-if gold_market_open:
-    gold_display = f"Rs {gold_tola:,.0f}"
-    gold_badge = "● GOLD LIVE"
-    gold_badge_style = "background-color:#e6f4ea; color:#1e8e3e;"
-    gold_ounce_display = f"${live_data['gold']:,.0f}"
-else:
-    gold_display = "⏸️ MARKET CLOSED"
-    gold_badge = "● GOLD OFFLINE"
-    gold_badge_style = "background-color:#fee2e2; color:#dc2626;"
-    gold_ounce_display = "-"
-
 st.markdown(f"""
 <div class="price-card">
-    <div class="live-badge" style="{gold_badge_style}">{gold_badge}</div>
-    <div class="big-price">{gold_display}</div>
+    <div class="live-badge">● GOLD LIVE</div>
+    <div class="big-price">Rs {gold_tola:,.0f}</div>
     <div class="price-label">24K Gold Per Tola</div>
     <div class="stats-container">
-        <div class="stat-box"><div class="stat-value">{gold_ounce_display}</div><div class="stat-label">Ounce</div></div>
+        <div class="stat-box"><div class="stat-value">${live_data['gold']:,.0f}</div><div class="stat-label">Ounce</div></div>
         <div class="stat-box"><div class="stat-value">Rs {live_data['usd']:.2f}</div><div class="stat-label">Dollar</div></div>
-        <div class="stat-box"><div class="stat-value">{f"AED {gold_dubai_tola:,.0f}" if gold_market_open else "-"}</div><div class="stat-label">Dubai</div></div>
+        <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
     </div>
     <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">Last Updated: <b>{live_data['time']}</b></div>
 </div>
 """, unsafe_allow_html=True)
 
-# REFRESH BUTTON
 if st.button("🔄 Check for New Gold Rate", use_container_width=True):
     manual_refresh()
     st.rerun()
 
-# SILVER CARD (WITH MARKET STATUS CHECK)
-silver_market_open = settings.get("silver_market_open", True)
-
-if silver_market_open:
-    silver_display = f"Rs {silver_tola:,.0f}"
-    silver_badge = "● SILVER LIVE"
-    silver_badge_style = "background-color:#eef2f6; color:#555;"
-    silver_ounce_display = f"${live_data['silver']:,.2f}"
-else:
-    silver_display = "⏸️ MARKET CLOSED"
-    silver_badge = "● SILVER OFFLINE"
-    silver_badge_style = "background-color:#fee2e2; color:#dc2626;"
-    silver_ounce_display = "-"
-
 st.markdown(f"""
 <div class="price-card">
-    <div class="live-badge" style="{silver_badge_style}">{silver_badge}</div>
-    <div class="big-price">{silver_display}</div>
+    <div class="live-badge" style="background-color:#eef2f6; color:#555;">● SILVER LIVE</div>
+    <div class="big-price">Rs {silver_tola:,.0f}</div>
     <div class="price-label">24K Silver Per Tola</div>
     <div class="stats-container">
-        <div class="stat-box"><div class="stat-value">{silver_ounce_display}</div><div class="stat-label">Ounce</div></div>
+        <div class="stat-box"><div class="stat-value">${live_data['silver']:,.2f}</div><div class="stat-label">Ounce</div></div>
         <div class="stat-box"><div class="stat-value">{live_data['time']}</div><div class="stat-label">Updated</div></div>
     </div>
 </div>
@@ -252,35 +206,9 @@ if st.session_state.admin_auth:
     
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
-    # TAB 1: Update Rates (WITH MARKET TOGGLES)
+    # TAB 1: Update Rates
     with tabs[0]:
-        st.markdown("### 🌐 Market Control")
-        st.caption("Toggle markets ON/OFF for public display")
-        
-        # Market Status Toggles
-        mcol1, mcol2 = st.columns(2)
-        with mcol1:
-            gold_toggle = st.toggle(
-                "🟡 Gold Market", 
-                value=st.session_state.gold_market_open,
-                key="gold_market_toggle"
-            )
-            st.session_state.gold_market_open = gold_toggle
-            
-        with mcol2:
-            silver_toggle = st.toggle(
-                "⚪ Silver Market", 
-                value=st.session_state.silver_market_open,
-                key="silver_market_toggle"
-            )
-            st.session_state.silver_market_open = silver_toggle
-        
-        if not gold_toggle or not silver_toggle:
-            st.markdown('<div class="warning-banner">⚠️ One or more markets are currently CLOSED to public</div>', unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("### Select Metal for Premium Update")
-        
+        st.markdown("### Select Metal")
         btn_cols = st.columns(2)
         with btn_cols[0]:
             if st.button("🟡 GOLD", use_container_width=True, type="primary" if st.session_state.selected_metal == "Gold" else "secondary"):
@@ -351,17 +279,15 @@ if st.session_state.admin_auth:
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
-        if st.button("🚀 PUBLISH RATE & SETTINGS", type="primary", use_container_width=True):
+        if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
             if repo:
                 try:
-                    # UPDATED: Include market status in settings
                     new_settings = {
                         "gold_premium": int(st.session_state.new_gold), 
-                        "silver_premium": int(st.session_state.new_silver),
-                        "gold_market_open": st.session_state.gold_market_open,
-                        "silver_market_open": st.session_state.silver_market_open
+                        "silver_premium": int(st.session_state.new_silver)
                     }
                     
+                    # Update manual.json
                     try:
                         contents = repo.get_contents("manual.json")
                         repo.update_file(contents.path, f"Update - {datetime.now().strftime('%H:%M')}", 
@@ -369,7 +295,7 @@ if st.session_state.admin_auth:
                     except Exception:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                     
-                    # Update History with ounce prices
+                    # Update History
                     try:
                         h_content = repo.get_contents("history.json")
                         history = json.loads(h_content.decoded_content.decode())
@@ -394,7 +320,7 @@ if st.session_state.admin_auth:
                     except Exception:
                         repo.create_file("history.json", "Init", json.dumps(history))
                     
-                    st.markdown('<div class="success-msg">✅ Settings & Rates Published! Live in 5 seconds.</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="success-msg">✅ Published! Live in 5 seconds.</div>', unsafe_allow_html=True)
                     manual_refresh()
                     
                 except Exception as e:
@@ -405,23 +331,8 @@ if st.session_state.admin_auth:
     # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
-        
-        # Show current market status
-        status_cols = st.columns(2)
-        with status_cols[0]:
-            if st.session_state.gold_market_open:
-                st.markdown("🟢 **Gold Market:** OPEN")
-            else:
-                st.markdown("🔴 **Gold Market:** CLOSED")
-        with status_cols[1]:
-            if st.session_state.silver_market_open:
-                st.markdown("🟢 **Silver Market:** OPEN")
-            else:
-                st.markdown("🔴 **Silver Market:** CLOSED")
-        
-        st.markdown("---")
-        
         stats_cols = st.columns(3)
+        
         with stats_cols[0]:
             st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(st.session_state.new_gold):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[1]:
@@ -431,6 +342,7 @@ if st.session_state.admin_auth:
         
         st.markdown("<br>", unsafe_allow_html=True)
         detail_cols = st.columns(2)
+        
         with detail_cols[0]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #d4af37; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">🟡 Gold Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["gold"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {gold_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Dubai Rate:</strong> AED {gold_dubai_tola:,.0f}</p></div>', unsafe_allow_html=True)
         with detail_cols[1]:
@@ -479,20 +391,32 @@ if st.session_state.admin_auth:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    # Safe column extraction with defaults for old data
-                    display_df = pd.DataFrame({
-                        'Date/Time': df['date'],
-                        'Gold Oz ($)': df.get('gold_ounce', 0).apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "-"),
-                        'Gold PKR': df.get('gold_pk', 0).apply(lambda x: f"Rs {x:,.0f}" if pd.notna(x) else "-"),
-                        'Silver Oz ($)': df.get('silver_ounce', 0).apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "-"),
-                        'Silver PKR': df.get('silver_pk', 0).apply(lambda x: f"Rs {x:,.0f}" if pd.notna(x) else "-"),
-                        'USD Rate': df.get('usd', 0).apply(lambda x: f"Rs {x:.2f}" if pd.notna(x) else "-")
-                    })
+                    # Safe column renaming with defaults for missing columns (backward compatibility)
+                    column_mapping = {
+                        'date': 'Date/Time',
+                        'gold_pk': 'Gold PKR',
+                        'silver_pk': 'Silver PKR',
+                        'gold_ounce': 'Gold Oz ($)',
+                        'silver_ounce': 'Silver Oz ($)',
+                        'usd': 'USD Rate'
+                    }
                     
-                    st.dataframe(display_df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
+                    # Only rename columns that exist
+                    df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+                    
+                    # Ensure all expected columns exist, fill with 0 if missing
+                    expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
+                    for col in expected_cols:
+                        if col not in df.columns:
+                            df[col] = 0
+                    
+                    # Reorder columns
+                    df = df[expected_cols]
+                    
+                    st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
                     
                     csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Export Full CSV", csv, f"history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+                    st.download_button("📥 Export CSV", csv, f"history_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
                 else:
                     st.info("📭 No history records found.")
             else:
@@ -500,7 +424,7 @@ if st.session_state.admin_auth:
         except Exception as e:
             st.info(f"📭 History empty or error: {str(e)}")
     
-    # TAB 4: CHARTS
+    # TAB 4: CHARTS (BUG-FREE VERSION)
     with tabs[3]:
         st.markdown("### 📈 Price Trends")
         
@@ -539,6 +463,7 @@ if st.session_state.admin_auth:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
+        # Bug-free chart rendering
         try:
             if repo:
                 contents = repo.get_contents("history.json")
@@ -548,7 +473,7 @@ if st.session_state.admin_auth:
                     df = pd.DataFrame(history_data)
                     df['date'] = pd.to_datetime(df['date'])
                     
-                    # Safely get numeric columns
+                    # Safely convert to numeric
                     df['gold_pk'] = pd.to_numeric(df.get('gold_pk', 0), errors='coerce')
                     df['silver_pk'] = pd.to_numeric(df.get('silver_pk', 0), errors='coerce')
                     df = df.dropna(subset=['date'])
@@ -567,6 +492,7 @@ if st.session_state.admin_auth:
                     if len(df_chart) < 2:
                         st.info("📊 Not enough data points for chart.")
                     else:
+                        # Create base chart
                         base = alt.Chart(df_chart).encode(
                             x=alt.X('date:T', title='Date', axis=alt.Axis(format='%d %b %H:%M')),
                             y=alt.Y(f'{y_col}:Q', title='Price (PKR)', scale=alt.Scale(zero=False)),
@@ -577,13 +503,16 @@ if st.session_state.admin_auth:
                         )
                         
                         if chart_type == "Area":
+                            # Layer area and line
                             chart = (base.mark_area(color=color, opacity=0.3) + 
                                     base.mark_line(color=color, strokeWidth=3) + 
                                     base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
                         else:
+                            # Line only
                             chart = (base.mark_line(color=color, strokeWidth=3) + 
                                     base.mark_point(filled=True, color=color, size=60, stroke='white', strokeWidth=2))
                         
+                        # Configure and display
                         final_chart = chart.properties(
                             title=title,
                             height=450
@@ -602,6 +531,7 @@ if st.session_state.admin_auth:
                         
                         st.altair_chart(final_chart, use_container_width=True)
                         
+                        # Metrics
                         c1, c2, c3, c4 = st.columns(4)
                         c1.metric("📈 High", f"Rs {df_chart[y_col].max():,.0f}")
                         c2.metric("📉 Low", f"Rs {df_chart[y_col].min():,.0f}")
