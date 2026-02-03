@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v29.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v30.0", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -90,11 +90,12 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - STRICT MODE (NO DEFAULTS)
-@st.cache_data(ttl=15, show_spinner=False)
+# 6. DATA ENGINE - HYBRID (TwelveData + Yahoo Fallback)
+@st.cache_data(ttl=300, show_spinner=False)  # Increased cache to 5 mins to save credits
 def get_live_rates():
     """
-    STRICT MODE: If API fails, return 0. Never return fake numbers.
+    Get live rates with strict error checking.
+    Priority: TwelveData -> Yahoo Finance (Fallback)
     """
     debug_logs = []
     gold_price = 0.0
@@ -102,53 +103,70 @@ def get_live_rates():
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # 1. GOLD (TwelveData)
+    # 1. GOLD STRATEGY
+    # Attempt 1: TwelveData
+    td_success = False
     try:
         if "TWELVE_DATA_KEY" in st.secrets:
             TD_KEY = st.secrets["TWELVE_DATA_KEY"]
             url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
-            gold_res = requests.get(url_gold, timeout=10)
+            gold_res = requests.get(url_gold, timeout=5)
             
             if gold_res.status_code == 200:
                 data = gold_res.json()
                 if 'price' in data:
                     gold_price = float(data['price'])
+                    td_success = True
                 else:
-                    debug_logs.append(f"Gold API Error: {json.dumps(data)}")
+                    debug_logs.append(f"TD Gold Limit/Error: {data.get('message', 'Unknown')}")
             else:
-                debug_logs.append(f"Gold Status Code: {gold_res.status_code}")
-        else:
-            debug_logs.append("Missing TWELVE_DATA_KEY")
+                debug_logs.append(f"TD Gold HTTP Error: {gold_res.status_code}")
     except Exception as e:
-        debug_logs.append(f"Gold Exception: {str(e)}")
+        debug_logs.append(f"TD Gold Ex: {str(e)}")
 
-    # 2. SILVER (Yahoo Finance)
+    # Attempt 2: Yahoo Finance (Unlimited Fallback)
+    if not td_success:
+        try:
+            debug_logs.append("Switching to Yahoo Gold...")
+            gold_ticker = yf.Ticker("XAU-USD")
+            # Try fetching standard day data
+            g_data = gold_ticker.history(period="1d", interval="1m")
+            if not g_data.empty:
+                gold_price = float(g_data['Close'].iloc[-1])
+            else:
+                # Backup standard scrape
+                gold_ticker = yf.Ticker("GC=F") # Gold Futures
+                g_data = gold_ticker.history(period="1d", interval="5m")
+                if not g_data.empty:
+                    gold_price = float(g_data['Close'].iloc[-1])
+                else:
+                    debug_logs.append("Yahoo Gold Failed")
+        except Exception as e:
+            debug_logs.append(f"Yahoo Gold Ex: {str(e)}")
+
+    # 2. SILVER STRATEGY
     try:
         silver_ticker = yf.Ticker("XAG-USD")
         silver_data = silver_ticker.history(period="1d", interval="1m")
         if not silver_data.empty:
             silver_price = float(silver_data['Close'].iloc[-1])
         else:
-            # Fallback to TwelveData for Silver if Yahoo fails
-            if "TWELVE_DATA_KEY" in st.secrets:
-                TD_KEY = st.secrets["TWELVE_DATA_KEY"]
-                url_silver = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
-                slv_res = requests.get(url_silver, timeout=5)
-                if slv_res.status_code == 200:
-                    s_data = slv_res.json()
-                    if 'price' in s_data:
-                        silver_price = float(s_data['price'])
-                    else:
-                        debug_logs.append("Silver API failed (Both Yahoo & TD)")
+             # Backup standard scrape
+            silver_ticker = yf.Ticker("SI=F") 
+            silver_data = silver_ticker.history(period="1d", interval="5m")
+            if not silver_data.empty:
+                silver_price = float(silver_data['Close'].iloc[-1])
+            else:
+                debug_logs.append("Yahoo Silver Failed")
     except Exception as e:
-        debug_logs.append(f"Silver Exception: {str(e)}")
+        debug_logs.append(f"Yahoo Silver Ex: {str(e)}")
 
     # 3. CURRENCY (ExchangeRate-API)
     try:
         if "CURR_KEY" in st.secrets:
             CURR_KEY = st.secrets["CURR_KEY"]
             url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
-            curr_res = requests.get(url_curr, timeout=10)
+            curr_res = requests.get(url_curr, timeout=5)
             
             if curr_res.status_code == 200:
                 c_data = curr_res.json()
