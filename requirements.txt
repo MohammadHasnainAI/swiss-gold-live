@@ -5,3 +5,4 @@ pandas
 altair
 PyGithub
 yfinance
+streamlit-autorefresh
