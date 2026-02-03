@@ -12,17 +12,17 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH EVERY 5 SECONDS (Simplified - works for all users)
+# AUTO-REFRESH - CRITICAL FIX: Simplified logic
 # ---------------------------------------------------------
 if "admin_auth" not in st.session_state:
     st.session_state.admin_auth = False
     
 if "admin_auto_refresh" not in st.session_state:
-    st.session_state.admin_auto_refresh = True  # Default ON for admin
+    st.session_state.admin_auto_refresh = True
 
-# CRITICAL FIX: Use same key for all users, simpler logic
+# Use single key for all users - admin can toggle off
 if not st.session_state.admin_auth or st.session_state.admin_auto_refresh:
-    st_autorefresh(interval=5000, key="global_refresh")
+    st_autorefresh(interval=5000, key="global_refresh_2024")
 
 # 2. HELPER FUNCTIONS
 def update_premium(key, amount):
@@ -34,11 +34,8 @@ def manual_refresh():
     """Clear ALL caches to force fresh data fetch"""
     get_live_rates.clear()
     load_settings.clear()
-    # Clear timestamps
-    if "last_data_fetch" in st.session_state:
-        del st.session_state["last_data_fetch"]
-    if "last_settings_fetch" in st.session_state:
-        del st.session_state["last_settings_fetch"]
+    if "last_api_fetch" in st.session_state:
+        del st.session_state["last_api_fetch"]
 
 # 3. CSS STYLES
 st.markdown("""
@@ -72,7 +69,7 @@ st.markdown("""
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
 .update-indicator {background: #dbeafe; border-left: 4px solid #3b82f6; padding: 0.5rem; border-radius: 4px; margin: 10px 0; font-size: 0.8rem; color: #1e40af; text-align: center;}
-.debug-info {background: #f8f9fa; border-left: 4px solid #6c757d; padding: 0.5rem; border-radius: 4px; margin: 5px 0; font-size: 0.7rem; color: #495057; font-family: monospace;}
+.debug-panel {background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 1rem; margin: 1rem 0; font-family: monospace; font-size: 0.75rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -82,62 +79,72 @@ try:
     if "GIT_TOKEN" in st.secrets:
         g = Github(st.secrets["GIT_TOKEN"])
         repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
+        st.session_state["github_connected"] = True
+    else:
+        st.session_state["github_connected"] = False
 except Exception as e:
     st.error(f"GitHub Connection Error: {e}")
+    st.session_state["github_connected"] = False
 
-# 5. SETTINGS ENGINE - Faster refresh
-@st.cache_data(ttl=5, show_spinner=False)  # 5 second cache
+# 5. SETTINGS ENGINE - Ultra-fast refresh
+@st.cache_data(ttl=5, show_spinner=False)
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0}
     if repo:
         try:
             content = repo.get_contents("manual.json")
             settings = json.loads(content.decoded_content.decode())
-            st.session_state["last_settings_fetch"] = datetime.now().strftime('%H:%M:%S')
             return settings
-        except Exception:
+        except Exception as e:
+            st.warning(f"Settings file not found, using defaults: {e}")
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - Faster refresh
-@st.cache_data(ttl=30, show_spinner=False)  # 30 second cache
+# 6. DATA ENGINE - Robust API fetching
+@st.cache_data(ttl=10, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets or "CURR_KEY" not in st.secrets:
-        st.session_state["last_data_fetch"] = "No API Keys"
-        return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "No API Keys", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        return {
+            "gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67,
+            "time": "No API Keys", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "fallback"
+        }
     
     try:
         TD_KEY = st.secrets["TWELVE_DATA_KEY"]
         CURR_KEY = st.secrets["CURR_KEY"]
         
-        # CRITICAL FIX: Removed spaces in API URLs
-        url_metals = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
-        metal_res = requests.get(url_metals, timeout=10).json()
+        # CRITICAL: Clean API URLs - no spaces
+        metals_url = f"https://api.twelvedata.com/price?symbol=XAU/USD,XAG/USD&apikey={TD_KEY}"
+        curr_url = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
         
-        url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
-        curr_res = requests.get(url_curr, timeout=10).json()
+        # Fetch with timeout
+        metal_res = requests.get(metals_url, timeout=10).json()
+        curr_res = requests.get(curr_url, timeout=10).json()
         
-        # Extract prices safely
-        gold_data = metal_res.get('XAU/USD', {})
-        silver_data = metal_res.get('XAG/USD', {})
+        # Extract with defaults
+        gold_oz = float(metal_res.get('XAU/USD', {}).get('price', 2750.0))
+        silver_oz = float(metal_res.get('XAG/USD', {}).get('price', 32.0))
         
-        gold_price = float(gold_data.get('price', 2750.00))
-        silver_price = float(silver_data.get('price', 32.00))
-        
-        # Store fetch timestamp
-        st.session_state["last_data_fetch"] = datetime.now().strftime('%H:%M:%S')
+        usd_rate = float(curr_res.get('conversion_rates', {}).get('PKR', 278.0))
+        aed_rate = float(curr_res.get('conversion_rates', {}).get('AED', 3.67))
         
         return {
-            "gold": gold_price,
-            "silver": silver_price,
-            "usd": curr_res.get('conversion_rates', {}).get('PKR', 278.0),
-            "aed": curr_res.get('conversion_rates', {}).get('AED', 3.67),
+            "gold": gold_oz,
+            "silver": silver_oz,
+            "usd": usd_rate,
+            "aed": aed_rate,
             "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
-            "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
+            "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "api"
         }
     except Exception as e:
-        st.session_state["last_data_fetch"] = f"Error: {e}"
-        return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Error", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
+        st.error(f"API Fetch Error: {e}")
+        return {
+            "gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67,
+            "time": "Error", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "error"
+        }
 
 # 7. LOAD DATA
 live_data = get_live_rates()
@@ -145,14 +152,13 @@ settings = load_settings()
 
 # DEBUG PANEL for admin
 if st.session_state.admin_auth:
-    with st.expander("🔧 Debug Info", expanded=False):
-        st.markdown(f"**Last API Fetch:** `{st.session_state.get('last_data_fetch', 'Never')}`")
-        st.markdown(f"**Last Settings Fetch:** `{st.session_state.get('last_settings_fetch', 'Never')}`")
-        st.markdown(f"**Raw Silver (oz):** `${live_data.get('silver', 0)}`")
+    with st.expander("🔧 Debug Panel", expanded=False):
+        st.markdown(f"**API Source:** `{live_data.get('source', 'unknown')}`")
+        st.markdown(f"**Gold (oz):** `${live_data['gold']}`")
+        st.markdown(f"**Silver (oz):** `${live_data['silver']}`")
+        st.markdown(f"**USD/PKR:** `Rs {live_data['usd']}`")
+        st.markdown(f"**Gold Premium:** `Rs {settings.get('gold_premium', 0)}`")
         st.markdown(f"**Silver Premium:** `Rs {settings.get('silver_premium', 0)}`")
-
-if "error" in live_data:
-    st.warning(f"⚠️ API Error: {live_data['error']}")
 
 # Initialize Session States
 if "new_gold" not in st.session_state: 
@@ -168,12 +174,12 @@ if "confirm_reset_chart" not in st.session_state:
 if "last_update" not in st.session_state:
     st.session_state.last_update = "Never"
 
-# 8. CALCULATIONS with error handling
+# 8. CALCULATIONS
 try:
-    gold_oz = float(live_data.get('gold', 0))
-    silver_oz = float(live_data.get('silver', 0))
-    usd_rate = float(live_data.get('usd', 278.0))
-    aed_rate = float(live_data.get('aed', 3.67))
+    gold_oz = float(live_data['gold'])
+    silver_oz = float(live_data['silver'])
+    usd_rate = float(live_data['usd'])
+    aed_rate = float(live_data['aed'])
     
     gold_tola = ((gold_oz / 31.1035) * 11.66 * usd_rate) + settings.get("gold_premium", 0)
     silver_tola = ((silver_oz / 31.1035) * 11.66 * usd_rate) + settings.get("silver_premium", 0)
@@ -211,12 +217,12 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Manual refresh button
+# Force refresh button
 if st.button("🔄 Force Refresh All Data", use_container_width=True):
     manual_refresh()
     st.rerun()
 
-# FIXED: Silver Card - now shows ounce price and premium correctly
+# Silver Card - FIXED: Shows ounce price
 st.markdown(f"""
 <div class="price-card">
     <div class="live-badge" style="background-color:#eef2f6; color:#555;">● SILVER LIVE</div>
@@ -254,7 +260,7 @@ if st.session_state.admin_auth:
     # Admin auto-refresh toggle
     col_toggle, col_info = st.columns([1, 3])
     with col_toggle:
-        auto_refresh_enabled = st.toggle("Auto-Refresh", value=st.session_state.admin_auto_refresh, key="toggle_refresh")
+        auto_refresh_enabled = st.toggle("Auto-Refresh", value=st.session_state.admin_auto_refresh, key="toggle_refresh_admin")
         st.session_state.admin_auto_refresh = auto_refresh_enabled
     
     with col_info:
@@ -352,7 +358,7 @@ if st.session_state.admin_auth:
             st.markdown('</div>', unsafe_allow_html=True)
         
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
-            if repo:
+            if repo and st.session_state.get("github_connected"):
                 try:
                     new_settings = {
                         "gold_premium": int(st.session_state.new_gold), 
@@ -374,6 +380,7 @@ if st.session_state.admin_auth:
                     except Exception:
                         history = []
                     
+                    # CRITICAL FIX: Ensure all values are properly typed
                     history.append({
                         "date": live_data['full_date'],
                         "gold_pk": float(gold_tola),
@@ -407,7 +414,7 @@ if st.session_state.admin_auth:
                 except Exception as e:
                     st.markdown(f'<div class="error-msg">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="error-msg">❌ GitHub not connected</div>', unsafe_allow_html=True)
+                st.markdown('<div class="error-msg">❌ GitHub not connected - Cannot save changes</div>', unsafe_allow_html=True)
     
     # TAB 2: Statistics
     with tabs[1]:
@@ -429,7 +436,7 @@ if st.session_state.admin_auth:
         with detail_cols[1]:
             st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; border-left: 4px solid #C0C0C0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"><h4 style="margin-top: 0; color: #1a1a1a; margin-bottom: 1rem;">⚪ Silver Details</h4><p style="margin: 0.5rem 0; color: #555;"><strong>Int\'l Price:</strong> ${live_data["silver"]:,.2f}/oz</p><p style="margin: 0.5rem 0; color: #555;"><strong>Local Tola:</strong> Rs {silver_tola:,.0f}</p><p style="margin: 0.5rem 0; color: #555;"><strong>Premium Applied:</strong> Rs {int(st.session_state.new_silver)}</p></div>', unsafe_allow_html=True)
     
-    # TAB 3: HISTORY
+    # TAB 3: HISTORY - FIXED: Proper column handling
     with tabs[2]:
         st.markdown("### 📜 Rate History Log")
         
@@ -466,29 +473,35 @@ if st.session_state.admin_auth:
         try:
             if repo:
                 contents = repo.get_contents("history.json")
-                history_data = json.loads(contents.decoded_content.decode())
+                history_data = json.loads(h_content.decoded_content.decode())
                 
                 if history_data and len(history_data) > 0:
+                    # CRITICAL FIX: Create DataFrame with explicit columns and defaults
                     df = pd.DataFrame(history_data)
+                    
+                    # Ensure all expected columns exist with defaults
+                    expected_cols = ['date', 'gold_pk', 'silver_pk', 'gold_ounce', 'silver_ounce', 'usd']
+                    for col in expected_cols:
+                        if col not in df.columns:
+                            df[col] = 0
+                        else:
+                            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    
                     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    column_mapping = {
+                    # Rename for display
+                    df = df.rename(columns={
                         'date': 'Date/Time',
                         'gold_pk': 'Gold PKR',
                         'silver_pk': 'Silver PKR',
                         'gold_ounce': 'Gold Oz ($)',
                         'silver_ounce': 'Silver Oz ($)',
                         'usd': 'USD Rate'
-                    }
+                    })
                     
-                    df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-                    
-                    expected_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
-                    for col in expected_cols:
-                        if col not in df.columns:
-                            df[col] = 0
-                    
-                    df = df[expected_cols]
+                    # Display in correct order
+                    display_cols = ['Date/Time', 'Gold Oz ($)', 'Gold PKR', 'Silver Oz ($)', 'Silver PKR', 'USD Rate']
+                    df = df[display_cols]
                     
                     st.dataframe(df.sort_values('Date/Time', ascending=False), use_container_width=True, hide_index=True)
                     
@@ -547,11 +560,14 @@ if st.session_state.admin_auth:
                 
                 if history_data and len(history_data) > 1:
                     df = pd.DataFrame(history_data)
-                    df['date'] = pd.to_datetime(df['date'])
                     
-                    df['gold_pk'] = pd.to_numeric(df.get('gold_pk', 0), errors='coerce')
-                    df['silver_pk'] = pd.to_numeric(df.get('silver_pk', 0), errors='coerce')
-                    df = df.dropna(subset=['date'])
+                    # Ensure numeric columns are properly typed
+                    numeric_cols = ['gold_pk', 'silver_pk', 'gold_ounce', 'silver_ounce', 'usd']
+                    for col in numeric_cols:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    
+                    df['date'] = pd.to_datetime(df['date'])
                     
                     if chart_metal == "Gold":
                         df_chart = df.dropna(subset=['gold_pk'])
