@@ -6,45 +6,16 @@ import pytz
 import pandas as pd
 import altair as alt
 from github import Github
-from streamlit_autorefresh import st_autorefresh
 import time
-import hashlib
-
-# FORCE CACHE CLEAR ON EVERY PAGE LOAD
-st.cache_data.clear()
-st.cache_resource.clear()
 
 # 1. PAGE CONFIG
 st.set_page_config(page_title="Islam Jewellery V13", page_icon="💎", layout="centered")
 
-# ---------------------------------------------------------
-# AUTO-REFRESH SYSTEM (5 SECONDS FOR ALL USERS)
-# ---------------------------------------------------------
-# This refreshes every 5 seconds for everyone - checks for updates
-st_autorefresh(interval=5000, key="global_refresh")
-
 # 2. HELPER FUNCTIONS
-def update_premium(key, amount):
-    if key not in st.session_state:
-        st.session_state[key] = 0
-    st.session_state[key] += amount
-
 def manual_refresh():
+    st.cache_data.clear()
     get_live_rates.clear()
     load_settings.clear()
-
-def get_update_hash():
-    """Generate hash of current settings to detect changes"""
-    try:
-        if repo:
-            content = repo.get_contents("manual.json")
-            settings = json.loads(content.decoded_content.decode())
-            # Include timestamp in hash for change detection
-            content_str = json.dumps(settings, sort_keys=True) + str(int(time.time()) // 5)
-            return hashlib.md5(content_str.encode()).hexdigest()[:8]
-    except:
-        pass
-    return "default"
 
 # 3. CSS STYLES
 st.markdown("""
@@ -77,22 +48,37 @@ st.markdown("""
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .warning-banner {background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 8px; border-left: 4px solid #ffc107; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
-/* Live update indicator */
-.update-pulse {
+/* Update notification */
+.update-toast {
     position: fixed;
-    top: 10px;
-    right: 10px;
-    width: 12px;
-    height: 12px;
-    background: #10b981;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #d4af37 0%, #f4e5c2 100%);
+    color: #1a1a1a;
+    padding: 15px 25px;
+    border-radius: 12px;
+    font-weight: 700;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     z-index: 9999;
+    animation: slideIn 0.5s ease-out;
+    border: 2px solid #d4af37;
 }
-@keyframes pulse {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(1.2); }
-    100% { opacity: 1; transform: scale(1); }
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+.checking-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #1a1a1a;
+    color: #d4af37;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 9999;
+    border: 1px solid #d4af37;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -104,22 +90,22 @@ try:
         g = Github(st.secrets["GIT_TOKEN"])
         repo = g.get_repo("MohammadHasnainAI/swiss-gold-live")
 except Exception as e:
-    st.error(f"GitHub Connection Error: {e}")
+    print(f"GitHub Error: {e}")
 
-# 5. SETTINGS ENGINE - NO CACHE (Always fresh)
+# 5. SETTINGS ENGINE
+@st.cache_data(ttl=3, show_spinner=False)  # Check every 3 seconds for updates
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
     if repo:
         try:
             content = repo.get_contents("manual.json")
-            data = json.loads(content.decoded_content.decode())
-            data["last_update"] = int(time.time())
-            return data
+            return json.loads(content.decoded_content.decode())
         except Exception:
             return default_settings
     return default_settings
 
-# 6. DATA ENGINE - NO CACHE (Always fresh)
+# 6. DATA ENGINE
+@st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
     if "TWELVE_DATA_KEY" not in st.secrets or "CURR_KEY" not in st.secrets:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "No API Keys", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -148,15 +134,9 @@ def get_live_rates():
     except Exception as e:
         return {"gold": 2750.0, "silver": 32.0, "usd": 278.0, "aed": 3.67, "time": "Error", "full_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
 
-# 7. LOAD DATA (ALWAYS FRESH - NO CACHE)
+# 7. LOAD DATA
 live_data = get_live_rates()
 settings = load_settings()
-
-# Show live indicator
-st.markdown('<div class="update-pulse" title="Live Updates Active"></div>', unsafe_allow_html=True)
-
-if "error" in live_data:
-    st.warning(f"⚠️ {live_data['error']}")
 
 # Initialize Session States
 if "new_gold" not in st.session_state: 
@@ -171,41 +151,38 @@ if "confirm_reset_history" not in st.session_state:
     st.session_state.confirm_reset_history = False
 if "confirm_reset_chart" not in st.session_state: 
     st.session_state.confirm_reset_chart = False
-if "last_publish_time" not in st.session_state:
-    st.session_state.last_publish_time = settings.get("last_update", 0)
-if "show_update_notice" not in st.session_state:
-    st.session_state.show_update_notice = False
+if "last_seen_update" not in st.session_state:
+    st.session_state.last_seen_update = settings.get("last_update", 0)
 
-# CHECK IF NEW UPDATE WAS PUBLISHED (For all users)
+# CHECK FOR UPDATES (Silent background check every 3 seconds via cache)
 current_update_time = settings.get("last_update", 0)
-if current_update_time > st.session_state.last_publish_time:
-    st.session_state.last_publish_time = current_update_time
-    st.session_state.show_update_notice = True
-    # Force reload settings to get new values
-    settings = load_settings()
+if current_update_time > st.session_state.last_seen_update:
+    # NEW UPDATE DETECTED!
+    st.session_state.last_seen_update = current_update_time
+    st.session_state.new_gold = int(settings.get("gold_premium", 0))
+    st.session_state.new_silver = int(settings.get("silver_premium", 0))
+    st.session_state.show_update_notification = True
+else:
+    st.session_state.show_update_notification = False
 
-# Show update notification
-if st.session_state.show_update_notice:
+# Show update notification and auto-refresh
+if st.session_state.get("show_update_notification", False):
     st.markdown("""
-    <div style="background: linear-gradient(90deg, #d4af37 0%, #f4e5c2 100%); 
-                color: #1a1a1a; 
-                padding: 10px 20px; 
-                border-radius: 8px; 
-                text-align: center;
-                font-weight: 700;
-                margin-bottom: 10px;
-                animation: slideDown 0.5s ease-out;">
-        🔔 Prices Updated! Showing latest rates...
+    <div class="update-toast">
+        🔔 Prices Updated by Admin!<br>
+        <span style="font-size: 0.85rem;">Loading new rates...</span>
     </div>
-    <style>
-    @keyframes slideDown {
-        from { transform: translateY(-100%); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-    }
-    </style>
+    <meta http-equiv="refresh" content="1">
     """, unsafe_allow_html=True)
-    # Clear notice after showing
-    st.session_state.show_update_notice = False
+    # Clear notification flag
+    st.session_state.show_update_notification = False
+
+# Show checking indicator (only for admin)
+if st.session_state.admin_auth:
+    st.markdown('<div class="checking-indicator">● Live Monitoring</div>', unsafe_allow_html=True)
+
+if "error" in live_data:
+    st.warning(f"⚠️ {live_data['error']}")
 
 # 8. CALCULATIONS
 try:
@@ -213,7 +190,6 @@ try:
     silver_tola = ((live_data['silver'] / 31.1035) * 11.66 * live_data['usd']) + settings.get("silver_premium", 0)
     gold_dubai_tola = (live_data['gold'] / 31.1035) * 11.66 * live_data['aed']
 except Exception as e:
-    st.error(f"Calculation Error: {e}")
     gold_tola = 0
     silver_tola = 0
     gold_dubai_tola = 0
@@ -232,7 +208,7 @@ st.markdown(f"""
         <div class="stat-box"><div class="stat-value">AED {gold_dubai_tola:,.0f}</div><div class="stat-label">Dubai</div></div>
     </div>
     <div style="font-size:0.6rem; color:#aaa; margin-top:8px; padding-top:5px; border-top:1px solid #eee;">
-        Last Updated: <b>{live_data['time']}</b> | Auto-refresh: <b>Active</b>
+        Last Updated: <b>{live_data['time']}</b>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -355,15 +331,15 @@ if st.session_state.admin_auth:
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # PUBLISH BUTTON - Triggers global refresh
+        # PUBLISH BUTTON - TRIGGERS GLOBAL UPDATE
         if st.button("🚀 PUBLISH RATE", type="primary", use_container_width=True):
             if repo:
                 try:
-                    # Add timestamp to force refresh detection
+                    # Create new settings with timestamp
                     new_settings = {
                         "gold_premium": int(st.session_state.new_gold), 
                         "silver_premium": int(st.session_state.new_silver),
-                        "last_update": int(time.time())
+                        "last_update": int(time.time())  # This triggers all users to refresh!
                     }
                     
                     # Update manual.json
@@ -401,14 +377,14 @@ if st.session_state.admin_auth:
                     
                     st.markdown("""
                     <div style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0; text-align: center; font-weight: 700;">
-                        ✅ Published Successfully!<br>
-                        <span style="font-size: 0.9rem; font-weight: normal;">All users will see updates in ~5 seconds</span>
+                        ✅ PUBLISHED SUCCESSFULLY!<br>
+                        <span style="font-size: 0.9rem; font-weight: normal;">All users will auto-refresh within 3 seconds</span>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Trigger immediate refresh for admin
-                    st.session_state.last_publish_time = int(time.time())
-                    time.sleep(1)  # Small delay to ensure GitHub update propagates
+                    # Update local timestamp and refresh admin page
+                    st.session_state.last_seen_update = new_settings["last_update"]
+                    time.sleep(1)
                     st.rerun()
                     
                 except Exception as e:
@@ -419,13 +395,13 @@ if st.session_state.admin_auth:
     # TAB 2: Statistics
     with tabs[1]:
         st.markdown("### Market Overview")
-        st.info("💡 All data refreshes automatically every 5 seconds for all users")
+        st.info("💡 System checks for admin updates every 3 seconds. Users auto-refresh only when you publish changes.")
         
         stats_cols = st.columns(3)
         with stats_cols[0]:
             st.markdown(f'<div style="background: #1a1a1a; color: #d4af37; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #d4af37;"><div style="font-size: 2rem;">🟡</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">Gold Premium</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {int(st.session_state.new_gold):,}</div></div>', unsafe_allow_html=True)
         with stats_cols[1]:
-            st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;"><div style="font-size: 2rem;">⚪</div><div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Silver Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background: white; border-radius: 12px; padding: 1.5rem; text-align: center; border: 2px solid #C0C0C0;"><div style="font-size: 2rem;">⚪</div><div style="font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem;">Silver Premium</div><div style="font-size: 1.8rem; font-weight: 800; color: #666;">Rs {int(st.session_state.new_silver):,}</div></div>', unsafe_encode_html=True)
         with stats_cols[2]:
             st.markdown(f'<div style="background: linear-gradient(135deg, #d4af37 0%, #f4e5c2 100%); color: #1a1a1a; border-radius: 12px; padding: 1.5rem; text-align: center;"><div style="font-size: 2rem;">💵</div><div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-top: 0.5rem;">USD/PKR</div><div style="font-size: 1.8rem; font-weight: 800;">Rs {live_data["usd"]:.2f}</div></div>', unsafe_allow_html=True)
         
@@ -439,7 +415,6 @@ if st.session_state.admin_auth:
     # TAB 3: HISTORY
     with tabs[2]:
         st.markdown("### 📜 Rate History Log")
-        st.caption("Updates in real-time for all connected users")
         
         header_cols = st.columns([3, 1])
         with header_cols[0]:
@@ -511,7 +486,6 @@ if st.session_state.admin_auth:
     # TAB 4: CHARTS
     with tabs[3]:
         st.markdown("### 📈 Price Trends")
-        st.caption("Live updates every 5 seconds")
         
         ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 1])
         
