@@ -10,7 +10,7 @@ import time
 import yfinance as yf
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v35.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v35.1", page_icon="💎", layout="centered")
 
 # 2. HELPER FUNCTIONS
 def clear_all_caches():
@@ -433,10 +433,14 @@ if st.session_state.admin_auth:
                     except:
                         repo.create_file("manual.json", "Init", json.dumps(new_settings))
                         
-                    # Update History
+                    # Update History - SAFETY CHECK ADDED
                     try:
                         hc = repo.get_contents("history.json")
-                        hist = json.loads(hc.decoded_content.decode())
+                        hist_data = json.loads(hc.decoded_content.decode())
+                        if not isinstance(hist_data, list):
+                            hist = []
+                        else:
+                            hist = hist_data
                     except:
                         hist = []
                         
