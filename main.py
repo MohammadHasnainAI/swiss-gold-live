@@ -11,7 +11,7 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v45.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v46.0", page_icon="💎", layout="centered")
 
 # 2. AUTO-REFRESH LOGIC
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
@@ -123,7 +123,7 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 8. DATA ENGINE (Yahoo Priority)
+# 8. DATA ENGINE (Yahoo Priority - SPOT PRICE)
 @st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
     tz_khi = pytz.timezone("Asia/Karachi")
@@ -136,15 +136,16 @@ def get_live_rates():
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # 1. MARKET DATA (Yahoo First)
+    # 1. MARKET DATA (Yahoo Spot)
     market_success = False
     try:
-        g_tick = yf.Ticker("GC=F") 
+        # CORRECTED: Using Spot Symbols (XAUUSD=X, XAGUSD=X)
+        g_tick = yf.Ticker("XAUUSD=X") 
         g_hist = g_tick.history(period="1d")
         if not g_hist.empty:
             gold_price = float(g_hist['Close'].iloc[-1])
         
-        s_tick = yf.Ticker("SI=F")
+        s_tick = yf.Ticker("XAGUSD=X")
         s_hist = s_tick.history(period="1d")
         if not s_hist.empty:
             silver_price = float(s_hist['Close'].iloc[-1])
@@ -152,9 +153,9 @@ def get_live_rates():
         if gold_price > 0:
             market_success = True
     except Exception as e:
-        debug_logs.append(f"Yahoo Market Error: {str(e)}")
+        debug_logs.append(f"Yahoo Spot Error: {str(e)}")
 
-    # 2. MARKET BACKUP (TwelveData)
+    # 2. MARKET BACKUP (TwelveData - Spot)
     if not market_success:
         try:
             if "TWELVE_DATA_KEY" in st.secrets:
@@ -393,7 +394,7 @@ if st.session_state.admin_auth:
                 else:
                     st.error(f"❌ {log}")
         else:
-            st.success("✅ All APIs Connected Successfully (Yahoo Primary)")
+            st.success("✅ All APIs Connected Successfully (Yahoo Spot Primary)")
 
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
