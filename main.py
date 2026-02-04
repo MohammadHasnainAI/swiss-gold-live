@@ -11,9 +11,9 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v46.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v49.0", page_icon="💎", layout="centered")
 
-# 2. AUTO-REFRESH LOGIC
+# 2. AUTO-REFRESH LOGIC (20 Seconds)
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
 
 # 3. SESSION STATE
@@ -39,24 +39,19 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
 .stApp {background-color:#f8f9fa; font-family:'Outfit', sans-serif; color:#333;}
 
-/* FIXED: REDUCED TOP PADDING TO MOVE HEADER UP */
 .block-container {
     padding-top: 1rem !important; 
     padding-bottom: 1rem !important; 
     max-width: 700px;
 }
+header[data-testid="stHeader"] {background-color: transparent;}
 
-/* HIDE STREAMLIT DEFAULT HEADER TO CLEAR SPACE */
-header[data-testid="stHeader"] {
-    background-color: transparent;
-}
-
-/* HEADER DESIGN */
+/* HEADER */
 .header-box {
     text-align:center; 
     padding: 25px 0; 
     margin-bottom:15px; 
-    margin-top: -20px; /* Pulls the box up into the empty space */
+    margin-top: -20px;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); 
     border-radius: 12px; 
     color: white; 
@@ -68,7 +63,7 @@ header[data-testid="stHeader"] {
 .brand-title {font-size:2.2rem; font-weight:800; color:#d4af37; letter-spacing:1px; text-transform:uppercase; line-height: 1.1; margin-bottom: 5px;}
 .brand-subtitle {font-size:0.8rem; color:#fff; font-weight:500; letter-spacing:3px; text-transform:uppercase; opacity: 0.8;}
 
-/* STATS BOX DESIGN */
+/* STATS BOX */
 .price-card {background:#ffffff; border-radius:16px; padding:15px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.04); border:1px solid #eef0f2; margin-bottom:8px;}
 .live-badge {background-color:#e6f4ea; color:#1e8e3e; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
 .sleep-badge {background-color:#eef2f6; color:#555; padding:3px 10px; border-radius:30px; font-weight:700; font-size:0.6rem; letter-spacing:0.5px; display:inline-block; margin-bottom:4px;}
@@ -96,6 +91,17 @@ header[data-testid="stHeader"] {
 .success-msg {background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0;}
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
+.source-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 5px;
+}
+.src-td {background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9;}
+.src-yf {background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7;}
+.src-err {background: #ffebee; color: #c62828; border: 1px solid #ef9a9a;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -123,7 +129,7 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 8. DATA ENGINE (Yahoo Priority - SPOT PRICE)
+# 8. DATA ENGINE (CUSTOM PRIORITIES)
 @st.cache_data(ttl=60, show_spinner=False)
 def get_live_rates():
     tz_khi = pytz.timezone("Asia/Karachi")
@@ -131,69 +137,86 @@ def get_live_rates():
     current_hour = now_khi.hour
     is_active_hours = 7 <= current_hour <= 23
     debug_logs = []
+    
+    # Initialize Variables
     gold_price = 0.0
     silver_price = 0.0
     usd_rate = 0.0
     aed_rate = 0.0
     
-    # 1. MARKET DATA (Yahoo Spot)
-    market_success = False
+    # Source Trackers
+    src_gold = "OFFLINE"
+    src_silver = "OFFLINE"
+    src_usd = "OFFLINE"
+    
+    # --- 1. GOLD STRATEGY (Priority: TwelveData -> Yahoo) ---
+    # Attempt 1: TwelveData
     try:
-        # CORRECTED: Using Spot Symbols (XAUUSD=X, XAGUSD=X)
-        g_tick = yf.Ticker("XAUUSD=X") 
-        g_hist = g_tick.history(period="1d")
-        if not g_hist.empty:
-            gold_price = float(g_hist['Close'].iloc[-1])
-        
-        s_tick = yf.Ticker("XAGUSD=X")
+        if "TWELVE_DATA_KEY" in st.secrets:
+            TD_KEY = st.secrets["TWELVE_DATA_KEY"]
+            url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
+            gold_res = requests.get(url_gold, timeout=5)
+            if gold_res.status_code == 200:
+                data = gold_res.json()
+                if 'price' in data:
+                    gold_price = float(data['price'])
+                    src_gold = "TwelveData"
+                else:
+                    debug_logs.append(f"TD Gold Limit: {data.get('message')}")
+    except Exception as e:
+        debug_logs.append(f"TD Gold Error: {str(e)}")
+
+    # Attempt 2: Yahoo (Backup for Gold)
+    if gold_price == 0:
+        try:
+            g_tick = yf.Ticker("XAUUSD=X") # Spot
+            g_hist = g_tick.history(period="1d")
+            if not g_hist.empty:
+                gold_price = float(g_hist['Close'].iloc[-1])
+                src_gold = "Yahoo Finance"
+        except Exception as e:
+            debug_logs.append(f"Yahoo Gold Error: {str(e)}")
+
+    # --- 2. SILVER STRATEGY (Priority: Yahoo -> TwelveData) ---
+    # Attempt 1: Yahoo
+    try:
+        s_tick = yf.Ticker("XAGUSD=X") # Spot
         s_hist = s_tick.history(period="1d")
         if not s_hist.empty:
             silver_price = float(s_hist['Close'].iloc[-1])
-            
-        if gold_price > 0:
-            market_success = True
+            src_silver = "Yahoo Finance"
     except Exception as e:
-        debug_logs.append(f"Yahoo Spot Error: {str(e)}")
+        debug_logs.append(f"Yahoo Silver Error: {str(e)}")
 
-    # 2. MARKET BACKUP (TwelveData - Spot)
-    if not market_success:
+    # Attempt 2: TwelveData (Backup for Silver)
+    if silver_price == 0:
         try:
             if "TWELVE_DATA_KEY" in st.secrets:
                 TD_KEY = st.secrets["TWELVE_DATA_KEY"]
-                url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
-                gold_res = requests.get(url_gold, timeout=5)
-                
-                if gold_res.status_code == 200:
-                    data = gold_res.json()
-                    if 'price' in data:
-                        gold_price = float(data['price'])
-                        # Get Silver
-                        url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
-                        slv_res = requests.get(url_slv, timeout=5)
-                        if slv_res.status_code == 200:
-                            s_data = slv_res.json()
-                            silver_price = float(s_data.get('price', 0))
-                        market_success = True
-                        debug_logs.append("Used Backup: TwelveData")
-                    else:
-                        debug_logs.append(f"TD Limit: {data.get('message', 'Limit')}")
+                url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
+                slv_res = requests.get(url_slv, timeout=5)
+                if slv_res.status_code == 200:
+                    s_data = slv_res.json()
+                    if 'price' in s_data:
+                        silver_price = float(s_data['price'])
+                        src_silver = "TwelveData"
         except Exception as e:
-            debug_logs.append(f"TD Error: {str(e)}")
+            debug_logs.append(f"TD Silver Error: {str(e)}")
 
-    # 3. CURRENCY (Yahoo First)
-    currency_success = False
+    # --- 3. CURRENCY STRATEGY (Priority: Yahoo -> ExchangeRateAPI) ---
+    # Attempt 1: Yahoo
     try:
         c_tick = yf.Ticker("PKR=X")
         c_hist = c_tick.history(period="1d")
         if not c_hist.empty:
             usd_rate = float(c_hist['Close'].iloc[-1])
             aed_rate = 3.67 # Fixed Peg
-            currency_success = True
+            src_usd = "Yahoo Finance"
     except Exception as e:
-        debug_logs.append(f"Yahoo Currency Error: {str(e)}")
+        debug_logs.append(f"Yahoo USD Error: {str(e)}")
 
-    # 4. CURRENCY BACKUP (ExchangeRate-API)
-    if not currency_success:
+    # Attempt 2: ExchangeRate-API (Backup)
+    if usd_rate == 0:
         try:
             if "CURR_KEY" in st.secrets:
                 CURR_KEY = st.secrets["CURR_KEY"]
@@ -203,14 +226,15 @@ def get_live_rates():
                     c_data = curr_res.json()
                     usd_rate = float(c_data.get('conversion_rates', {}).get('PKR', 0))
                     aed_rate = float(c_data.get('conversion_rates', {}).get('AED', 0))
-                    debug_logs.append("Used Backup: ExchangeRate-API")
+                    src_usd = "ExchangeRate-API"
         except Exception as e:
-            debug_logs.append(f"Currency API Error: {str(e)}")
+            debug_logs.append(f"Currency Backup Error: {str(e)}")
 
     return {
         "gold": gold_price, "silver": silver_price, "usd": usd_rate, "aed": aed_rate,
+        "src_gold": src_gold, "src_silver": src_silver, "src_usd": src_usd,
         "debug": debug_logs,
-        "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M %p"),
+        "time": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%I:%M:%S %p"),
         "full_date": datetime.now(pytz.timezone("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S"),
         "active_mode": is_active_hours
     }
@@ -229,7 +253,7 @@ try:
     else:
         live_data = get_live_rates()
 except:
-    live_data = {"gold": 0, "silver": 0, "usd": 0, "aed": 0, "debug": ["Crash"], "full_date": "Error", "active_mode": True}
+    live_data = {"gold": 0, "silver": 0, "usd": 0, "aed": 0, "src_gold": "ERR", "src_silver": "ERR", "src_usd": "ERR", "debug": ["Crash"], "full_date": "Error", "active_mode": True}
 
 try:
     settings = load_settings()
@@ -267,7 +291,6 @@ else:
     silver_tola = 0
 
 # 12. DISPLAY
-# FIXED HEADER STRUCTURE (Title FIRST, then Subtitle)
 st.markdown("""
 <div class="header-box">
     <div class="brand-title">Islam Jewellery</div>
@@ -325,7 +348,7 @@ if silver_tola > 0:
         <div class="price-label">24K Silver Per Tola</div>
         <div class="stats-container">
             <div class="stat-box">
-                <div class="stat-value">${silver_ounce:.2f}</div>
+                <div class="stat-value">${silver_ounce:,.2f}</div>
                 <div class="stat-label">Ounce USD</div>
                 <div class="stat-time">🕒 {update_time}</div>
             </div>
@@ -379,8 +402,24 @@ if st.session_state.admin_auth:
             clear_all_caches()
             st.rerun()
     
+    # NEW: SOURCE MONITOR
+    with st.expander("📡 Live Source Monitor", expanded=True):
+        sc1, sc2, sc3 = st.columns(3)
+        
+        def get_color(src):
+            if "TwelveData" in src: return "#e3f2fd" # Blue
+            if "Yahoo" in src: return "#e8f5e9" # Green
+            return "#ffebee" # Red/Error
+            
+        with sc1:
+            st.markdown(f'<div style="text-align:center; padding:10px; border-radius:8px; background:{get_color(live_data["src_gold"])};"><b>🟡 Gold</b><br>{live_data["src_gold"]}</div>', unsafe_allow_html=True)
+        with sc2:
+            st.markdown(f'<div style="text-align:center; padding:10px; border-radius:8px; background:{get_color(live_data["src_silver"])};"><b>⚪ Silver</b><br>{live_data["src_silver"]}</div>', unsafe_allow_html=True)
+        with sc3:
+            st.markdown(f'<div style="text-align:center; padding:10px; border-radius:8px; background:{get_color(live_data["src_usd"])};"><b>💵 USD</b><br>{live_data["src_usd"]}</div>', unsafe_allow_html=True)
+
     # DEBUGGER
-    with st.expander("🛠️ Connection Status (Debug)", expanded=True):
+    with st.expander("🛠️ Debug Logs", expanded=False):
         if live_data.get("debug"):
             for log in live_data["debug"]:
                 if "TD Gold Limit" in log:
@@ -394,7 +433,7 @@ if st.session_state.admin_auth:
                 else:
                     st.error(f"❌ {log}")
         else:
-            st.success("✅ All APIs Connected Successfully (Yahoo Spot Primary)")
+            st.success("✅ Clean run (No errors)")
 
     tabs = st.tabs(["💰 Update Rates", "📊 Statistics", "📜 History", "📈 Charts"])
     
