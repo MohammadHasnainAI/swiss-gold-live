@@ -11,9 +11,9 @@ import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="Islam Jewellery v49.0", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Islam Jewellery v51.0", page_icon="💎", layout="centered")
 
-# 2. AUTO-REFRESH LOGIC (20 Seconds)
+# 2. AUTO-REFRESH LOGIC (20 SECONDS AS REQUESTED)
 st_autorefresh(interval=20000, limit=None, key="gold_sync")
 
 # 3. SESSION STATE
@@ -91,17 +91,6 @@ header[data-testid="stHeader"] {background-color: transparent;}
 .success-msg {background: #d4edda; color: #155724; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745; margin: 1rem 0;}
 .error-msg {background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545; margin: 1rem 0;}
 .reset-container {background: #fff5f5; border: 2px solid #feb2b2; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;}
-.source-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: bold;
-    margin-left: 5px;
-}
-.src-td {background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9;}
-.src-yf {background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7;}
-.src-err {background: #ffebee; color: #c62828; border: 1px solid #ef9a9a;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,7 +104,7 @@ except Exception as e:
     st.error(f"GitHub Connection Failed: {e}")
 
 # 7. SETTINGS ENGINE
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_settings():
     default_settings = {"gold_premium": 0, "silver_premium": 0, "last_update": 0}
     if repo:
@@ -129,14 +118,19 @@ def load_settings():
             return default_settings
     return default_settings
 
-# 8. DATA ENGINE (CUSTOM PRIORITIES)
-@st.cache_data(ttl=60, show_spinner=False)
+# 8. DATA ENGINE (HIGH SPEED 15s Cache)
+@st.cache_data(ttl=15, show_spinner=False)
 def get_live_rates():
     tz_khi = pytz.timezone("Asia/Karachi")
     now_khi = datetime.now(tz_khi)
     current_hour = now_khi.hour
     is_active_hours = 7 <= current_hour <= 23
     debug_logs = []
+    
+    # Fake Browser Header to prevent 429 Errors
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     
     # Initialize Variables
     gold_price = 0.0
@@ -150,12 +144,11 @@ def get_live_rates():
     src_usd = "OFFLINE"
     
     # --- 1. GOLD STRATEGY (Priority: TwelveData -> Yahoo) ---
-    # Attempt 1: TwelveData
     try:
         if "TWELVE_DATA_KEY" in st.secrets:
             TD_KEY = st.secrets["TWELVE_DATA_KEY"]
             url_gold = f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={TD_KEY}"
-            gold_res = requests.get(url_gold, timeout=5)
+            gold_res = requests.get(url_gold, headers=headers, timeout=5) # Added headers
             if gold_res.status_code == 200:
                 data = gold_res.json()
                 if 'price' in data:
@@ -166,10 +159,9 @@ def get_live_rates():
     except Exception as e:
         debug_logs.append(f"TD Gold Error: {str(e)}")
 
-    # Attempt 2: Yahoo (Backup for Gold)
     if gold_price == 0:
         try:
-            g_tick = yf.Ticker("XAUUSD=X") # Spot
+            g_tick = yf.Ticker("XAUUSD=X")
             g_hist = g_tick.history(period="1d")
             if not g_hist.empty:
                 gold_price = float(g_hist['Close'].iloc[-1])
@@ -178,9 +170,8 @@ def get_live_rates():
             debug_logs.append(f"Yahoo Gold Error: {str(e)}")
 
     # --- 2. SILVER STRATEGY (Priority: Yahoo -> TwelveData) ---
-    # Attempt 1: Yahoo
     try:
-        s_tick = yf.Ticker("XAGUSD=X") # Spot
+        s_tick = yf.Ticker("XAGUSD=X")
         s_hist = s_tick.history(period="1d")
         if not s_hist.empty:
             silver_price = float(s_hist['Close'].iloc[-1])
@@ -188,13 +179,12 @@ def get_live_rates():
     except Exception as e:
         debug_logs.append(f"Yahoo Silver Error: {str(e)}")
 
-    # Attempt 2: TwelveData (Backup for Silver)
     if silver_price == 0:
         try:
             if "TWELVE_DATA_KEY" in st.secrets:
                 TD_KEY = st.secrets["TWELVE_DATA_KEY"]
                 url_slv = f"https://api.twelvedata.com/price?symbol=XAG/USD&apikey={TD_KEY}"
-                slv_res = requests.get(url_slv, timeout=5)
+                slv_res = requests.get(url_slv, headers=headers, timeout=5) # Added headers
                 if slv_res.status_code == 200:
                     s_data = slv_res.json()
                     if 'price' in s_data:
@@ -204,24 +194,22 @@ def get_live_rates():
             debug_logs.append(f"TD Silver Error: {str(e)}")
 
     # --- 3. CURRENCY STRATEGY (Priority: Yahoo -> ExchangeRateAPI) ---
-    # Attempt 1: Yahoo
     try:
         c_tick = yf.Ticker("PKR=X")
         c_hist = c_tick.history(period="1d")
         if not c_hist.empty:
             usd_rate = float(c_hist['Close'].iloc[-1])
-            aed_rate = 3.67 # Fixed Peg
+            aed_rate = 3.67 
             src_usd = "Yahoo Finance"
     except Exception as e:
         debug_logs.append(f"Yahoo USD Error: {str(e)}")
 
-    # Attempt 2: ExchangeRate-API (Backup)
     if usd_rate == 0:
         try:
             if "CURR_KEY" in st.secrets:
                 CURR_KEY = st.secrets["CURR_KEY"]
                 url_curr = f"https://v6.exchangerate-api.com/v6/{CURR_KEY}/latest/USD"
-                curr_res = requests.get(url_curr, timeout=5)
+                curr_res = requests.get(url_curr, headers=headers, timeout=5) # Added headers
                 if curr_res.status_code == 200:
                     c_data = curr_res.json()
                     usd_rate = float(c_data.get('conversion_rates', {}).get('PKR', 0))
@@ -246,12 +234,8 @@ try:
     cur_hour = datetime.now(tz_khi).hour
     wait_time = 90 if (7 <= cur_hour <= 23) else 1800
     
-    if (current_ts - st.session_state.last_api_call) > wait_time:
-        clear_all_caches()
-        live_data = get_live_rates()
-        st.session_state.last_api_call = current_ts
-    else:
-        live_data = get_live_rates()
+    # In High Speed mode, we just check the cache timestamp
+    live_data = get_live_rates()
 except:
     live_data = {"gold": 0, "silver": 0, "usd": 0, "aed": 0, "src_gold": "ERR", "src_silver": "ERR", "src_usd": "ERR", "debug": ["Crash"], "full_date": "Error", "active_mode": True}
 
@@ -348,7 +332,7 @@ if silver_tola > 0:
         <div class="price-label">24K Silver Per Tola</div>
         <div class="stats-container">
             <div class="stat-box">
-                <div class="stat-value">${silver_ounce:,.2f}</div>
+                <div class="stat-value">${silver_ounce:.2f}</div>
                 <div class="stat-label">Ounce USD</div>
                 <div class="stat-time">🕒 {update_time}</div>
             </div>
